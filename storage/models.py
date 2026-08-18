@@ -6,7 +6,7 @@ class TestRun(SQLModel, table = True):
     id: Optional[int] = Field(default=None, primary_key=True)
     base_url: str
     total_tests: int
-    issues_fouind: int
+    issues_found: int
     run_timestamp: datetime= Field(default_factory = datetime.now)
 
 
@@ -26,7 +26,6 @@ class Issue(SQLModel, table = True):
     run_id: int = Field(foreign_key="testrun.id")
     method: str
     path: str
-    test_type: str
     description: str
     status_code: int
-    severity: int        
+    severity: str        

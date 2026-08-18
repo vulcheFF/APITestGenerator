@@ -4,6 +4,8 @@ from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_req
 from generator.data_generator import generate_valid_object, generate_invalid_objects
 from executor.test_runner import execute_test
 from analyzer.report import analyze_results, print_report
+from storage.repository import save_run
+from storage.database import init_db
 
 def fill_path_params(path: str) -> str:
     return re.sub(r"\{[^}]+\}", "1", path)
@@ -56,9 +58,13 @@ def run_all_tests(base_url: str) -> list[dict]:
 
 
 if __name__ == "__main__":
+    init_db()
     results = run_all_tests("http://127.0.0.1:8000")
     analysis = analyze_results(results)
     print_report(analysis)
+
+    run_id = save_run("http://127.0.0.1:8000", results, analysis)
+    print(f"\nSaved as run#{run_id}")
     # for res in results:
     #     print(res["method"], res["path"], "-", res["description"], "->", res["status_code"])
     #     # if res["status_code"] == 422:
