@@ -16,6 +16,9 @@ class TestResult(SQLModel, table = True):
     method: str
     path: str
     test_type: str
+    category: Optional[str] = None
+    field: Optional[str] = None
+    expected_status: Optional[int] = None
     description: str
     status_code: int
     data_sent: Optional[str] = None
@@ -26,6 +29,9 @@ class Issue(SQLModel, table = True):
     run_id: int = Field(foreign_key="testrun.id")
     method: str
     path: str
+    category: Optional[str] = None
+    field: Optional[str] = None
+    expected_status: Optional[int] = None
     description: str
     status_code: int
     severity: str        

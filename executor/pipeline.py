@@ -1,7 +1,8 @@
 import re
-from generator.path_param_generator import generate_path_param_cases
+
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema
-from generator.data_generator import generate_valid_object, generate_invalid_objects
+from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories
+from generator.path_param_generator import generate_path_param_cases
 from executor.test_runner import execute_test
 from analyzer.report import analyze_results, print_report
 from storage.repository import save_run
@@ -18,6 +19,7 @@ def run_all_tests(base_url: str) -> list[dict]:
     spec = fetch_openapi_spec(base_url)
     endpoints = extract_endpoints(spec)
     results = []
+    all_skipped = []
 
     for endpoint in endpoints:
         if endpoint["method"] in ("POST", "PUT"):
@@ -33,6 +35,9 @@ def run_all_tests(base_url: str) -> list[dict]:
             valid_data = generate_valid_object(schema)
             result  = execute_test(base_url, endpoint["method"], filled_path, valid_data)
             result["test_type"] = "valid"
+            result["category"] = "valid_data"
+            result["field"] = None
+            result["expected_status"] = 200
             result["description"] = "Valid data"
             results.append(result)
 
@@ -41,30 +46,53 @@ def run_all_tests(base_url: str) -> list[dict]:
             for case in generate_invalid_objects(schema):
                 result = execute_test(base_url, endpoint["method"], filled_path, case["data"])
                 result["test_type"] = "invalid"
+                result["category"] = case["category"]
+                result["field"] = case["field"]
+                result["expected_status"] = case["expected_status"]
                 result["description"] = case["description"]
                 results.append(result)
+
+            for skipped in get_skipped_categories(schema):
+                all_skipped.append({
+                    "path": endpoint["path"],
+                    "method": endpoint["method"],
+                    **skipped,
+                })
 
         if endpoint["method"] in ("GET", "DELETE") and "{" in endpoint["path"]:
             for case in generate_path_param_cases():
                 test_path = fill_path_params_with_value(endpoint["path"], case["value"])
                 result = execute_test(base_url, endpoint["method"], test_path, data=None)
                 result["test_type"] = "path_param"
+                result["category"] = case["category"]
+                result["field"] = None
+                result["expected_status"] = case["expected_status"]
                 result["description"] = case["description"]
-                result["case_id"] = case["case_id"]
                 results.append(result)
 
-    return results
+    return results, all_skipped
 
 
 
 if __name__ == "__main__":
     init_db()
-    results = run_all_tests("http://127.0.0.1:8000")
+
+    results, skipped = run_all_tests("http://127.0.0.1:8000")
     analysis = analyze_results(results)
     print_report(analysis)
+    if skipped:
+        print("\n--------Skipped categories(not defined)------------")
+        for s in skipped:
+            print(f"{s['method']} {s['path']} - {s['category']}: {s['reason']}")
 
     run_id = save_run("http://127.0.0.1:8000", results, analysis)
     print(f"\nSaved as run#{run_id}")
+
+
+
+
+
+
     # for res in results:
     #     print(res["method"], res["path"], "-", res["description"], "->", res["status_code"])
     #     # if res["status_code"] == 422:

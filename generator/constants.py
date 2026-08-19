@@ -5,6 +5,7 @@ BOUNDARY_NUMERIC = "boundary_numeric"
 BOUNDARY_STRING = "boundary_string"
 INVALID_ENUM = "invalid_enum"
 INVALID_BOOLEAN = "invalid_boolean"
+NEGATIVE_VALUE = "negative_value"
 
 #path params
 VALID_ID = "valid_id"
