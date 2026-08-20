@@ -1,13 +1,14 @@
 import json
-from storage.database import get_session
+from storage.database import get_session, engine
 from storage.models import TestRun, TestResult, Issue
-
+from sqlmodel import Session, select
 
 def save_run(base_url: str, results: list[dict], analysis: dict) -> int:
     with get_session() as session:
         run = TestRun(
             base_url=base_url,
             total_tests=analysis["total_tests"],
+            passed_count=analysis["passed_count"],
             issues_found=analysis["issues_found"],
 
         )
@@ -16,6 +17,9 @@ def save_run(base_url: str, results: list[dict], analysis: dict) -> int:
         session.refresh(run) 
 
         for r in results:
+            expected = r.get("expected_status")
+            actual = r["status_code"]
+            is_passed = (expected is None) or (actual == expected)
             result_row = TestResult(
                 run_id=run.id,
                 method=r["method"],
@@ -23,7 +27,8 @@ def save_run(base_url: str, results: list[dict], analysis: dict) -> int:
                 test_type=r["test_type"],
                 category = r.get("category"),
                 field=r.get("field"),
-                expected_status=r.get("expected_status"),
+                expected_status= expected,
+                passed = is_passed,
                 description=r["description"],
                 status_code=r["status_code"],
                 data_sent=json.dumps(r.get("data_sent")),
@@ -47,3 +52,21 @@ def save_run(base_url: str, results: list[dict], analysis: dict) -> int:
 
         session.commit()
         return run.id
+
+def get_run_summary(run_id: int):
+    with Session(engine) as session:
+        run = session.get(TestRun, run_id)
+        all_results = session.exec(
+            select(TestResult).where(TestResult.run_id == run_id)
+        ).all()
+        issues = session.exec(
+            select(Issue).where(Issue.run_id == run_id)
+        ).all()
+
+        return {
+            "run": run,
+            "total": len(all_results),
+            "passed":[r for r in all_results if r.passed],
+            "failed":[r for r in all_results if not r.passed],
+            "issues": issues,
+        }

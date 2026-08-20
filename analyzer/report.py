@@ -20,6 +20,7 @@ def determine_severity(category: str) -> str:
 def analyze_results(results: list[dict])-> dict:
     total = len(results)
     issues=[]
+    passed=[]
 
     for r in results:
         expected = r.get("expected_status")
@@ -37,6 +38,16 @@ def analyze_results(results: list[dict])-> dict:
                 "severity": determine_severity(r.get("category")),
 
             })
+        else:
+            passed.append({
+                "method": r["method"],
+                "path": r["path"],
+                "category": r.get("category"),
+                "field": r.get("field"),
+                "description": r["description"],                
+                "status_code": actual,
+            })
+
 
 
         # # при invalid тест има грешка, но получавваме 200 или 201 тоест има някакъв бъг
@@ -68,7 +79,9 @@ def analyze_results(results: list[dict])-> dict:
     return {
         "total_tests": total,
         "issues_found": len(issues),
+        "passed_count": len(passed),
         "issues": issues,
+        "passed": passed,
 
     }
 
@@ -98,10 +111,27 @@ def analyze_results(results: list[dict])-> dict:
 
 
 
-def print_report(analysis: dict):
-    print(f"Total test run:{analysis['total_tests']} ")
-    print(f"Issues found:{analysis['issues_found']} ")
+def print_report(analysis: dict, show_passed: bool = True):
+    total = analysis['total_tests']
+    issues_count = analysis['issues_found']
+    passed_count = analysis['passed_count']
+
+    print(f"Total test run:{total} ")
+    print(f"Passed count:{passed_count} ")
+    print(f"Issues found:{issues_count} ")
     print("-"*39)
-    for issue in analysis["issues"]:
-        print(f"[{issue['severity']}] {issue['method']} {issue['path']} {issue['category']}")
-        print(f"    {issue['description']} -> expected {issue['expected_status']} got {issue['status_code']}")
+
+    if issues_count:
+        print("\nISSUES:")
+        for issue in analysis['issues']:
+            print(f"[{issue['severity']}] {issue['method']} {issue['path']} {issue['category']}")
+            print(f"    {issue['description']} -> expected {issue['expected_status']} got {issue['status_code']}")
+
+    if show_passed:
+        if passed_count:
+            print("\nPASSED:")
+            for p in analysis['passed']:
+                print(f"[PASS] [{p['method']}] {p['path']} {p['category']} - {p['description']}")
+          
+
+    
