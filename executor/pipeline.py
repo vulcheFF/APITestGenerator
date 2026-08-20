@@ -1,5 +1,5 @@
 import re
-
+from generator import constants
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories
 from generator.path_param_generator import generate_path_param_cases
@@ -31,12 +31,12 @@ def run_all_tests(base_url: str, category_filter: list[str] = None) -> tuple[lis
             filled_path = fill_path_params(endpoint["path"])
 
 
-            if category_filter is None or "valid_data" in category_filter:
+            if category_filter is None or constants.VALID_DATA in category_filter:
                 #валидни
                 valid_data = generate_valid_object(schema)
                 result  = execute_test(base_url, endpoint["method"], filled_path, valid_data)
                 result["test_type"] = "valid"
-                result["category"] = "valid_data"
+                result["category"] = constants.VALID_DATA
                 result["field"] = None
                 result["expected_status"] = 200
                 result["description"] = "Valid data"

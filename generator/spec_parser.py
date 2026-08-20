@@ -1,5 +1,5 @@
 import requests
-print("STARTING--we in spec_parser--") #debug
+#print("STARTING--we in spec_parser--") #debug
 
 
 def fetch_openapi_spec(base_url: str) -> dict:
