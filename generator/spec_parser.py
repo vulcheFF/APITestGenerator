@@ -53,7 +53,7 @@ def get_response_schema(spec: dict, endpoint: dict, status_code: str) -> dict | 
     json_content = content.get("application/json", {})
     schema_ref = json_content.get("schema", {})
 
-    if "$ref" in schema:
+    if "$ref" in schema_ref:
         return resolve_schema_ref(spec, schema_ref["$ref"])
 
     return schema_ref if schema_ref else None

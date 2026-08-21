@@ -1,17 +1,20 @@
+from generator import constants
+
 SEVERITY_MAP = {
-    "list_endpoint": "HIGH", 
-    "type_mismatch": "HIGH",
-    "missing_required": "HIGH",
-    "boundary_numeric": "HIGH",
-    "boundary_string": "MEDIUM",
-    "invalid_enum": "MEDIUM",
-    "invalid_boolean": "MEDIUM",
-    "invalid_pattern": "MEDIUM",
-    "nonexistent_id": "HIGH",
-    "invalid_id_format": "MEDIUM",
-    "negative_id": "LOW",
-    "valid_id": "HIGH",
-    "negative_value": "INFO" #не можем да кажем точно дали е бъг или не - флаг за ръчна проверка. 
+    constants.LIST_ENDPOINT: "HIGH",
+    constants.TYPE_MISMATCH: "HIGH",
+    constants.MISSING_REQUIRED: "HIGH",
+    constants.BOUNDARY_NUMERIC: "HIGH",
+    constants.BOUNDARY_STRING: "MEDIUM",
+    constants.INVALID_ENUM: "MEDIUM",
+    constants.INVALID_BOOLEAN: "MEDIUM",
+    constants.INVALID_PATTERN: "MEDIUM",
+    constants.NONEXISTENT_ID: "HIGH",
+    constants.INVALID_ID_FORMAT: "MEDIUM",
+    constants.NEGATIVE_ID: "LOW",
+    constants.VALID_ID: "HIGH",
+    constants.NEGATIVE_VALUE: "INFO",  # fake pass probability - manual check
+    constants.RESPONSE_SCHEMA_MISMATCH: "MEDIUM",
 }
 
 def determine_severity(category: str) -> str:
@@ -79,14 +82,27 @@ def analyze_results(results: list[dict])-> dict:
 
             })
         else:
-            passed.append({
-                "method": r["method"],
-                "path": r["path"],
-                "category": r.get("category"),
-                "field": r.get("field"),
-                "description": r["description"],                
-                "status_code": actual,
-            })
+            conformance_errors  = r.get("schema_conformance_errors")
+            if conformance_errors:
+                issues.append({
+                    "method": r["method"],
+                    "path": r["path"],
+                    "category": constants.RESPONSE_SCHEMA_MISMATCH,
+                    "field": r.get("field"),
+                    "description": f"{r['description']} — response body несъответства на декларираната схема: {'; '.join(conformance_errors)}",
+                    "expected_status": expected,
+                    "status_code": actual,
+                    "severity": determine_severity(constants.RESPONSE_SCHEMA_MISMATCH),
+                })
+            else:
+                passed.append({
+                    "method": r["method"],
+                    "path": r["path"],
+                    "category": r.get("category"),
+                    "field": r.get("field"),
+                    "description": r["description"],                
+                    "status_code": actual,
+                })
 
 
     return {

@@ -11,6 +11,7 @@ INVALID_BOOLEAN = "invalid_boolean"
 INVALID_PATTERN = "invalid_pattern"
 NEGATIVE_VALUE = "negative_value"
 VALID_DATA = "valid_data"
+RESPONSE_SCHEMA_MISMATCH = "response_schema_mismatch"
 
 #path params
 VALID_ID = "valid_id"

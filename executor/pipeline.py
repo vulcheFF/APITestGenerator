@@ -1,7 +1,8 @@
 import re
 import random
+from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
-from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema
+from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories
 from generator.path_param_generator import generate_path_param_cases
 from executor.test_runner import execute_test
@@ -15,6 +16,13 @@ def fill_path_params(path: str) -> str:
 def fill_path_params_with_value(path: str, value: str) -> str:
     return re.sub(r"\{[^}]+\}", value, path)
 
+def attach_schema_conformance(result: dict, spec: dict, endpoint: dict) -> dict:
+    response_schema = get_response_schema(spec, endpoint, str(result["status_code"]))
+    if response_schema is not None:
+        result["schema_conformance_errors"] = validate_response_against_schema(result["response_body"], response_schema)
+    else:
+        result["schema_conformance_errors"] = None
+    return result
 
 def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None) -> tuple[list[dict], list[dict]]:
     if seed is not None:
@@ -38,7 +46,8 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
             if category_filter is None or constants.VALID_DATA in category_filter:
                 #валидни
                 valid_data = generate_valid_object(schema)
-                result  = execute_test(base_url, endpoint["method"], filled_path, valid_data)
+                result = execute_test(base_url, endpoint["method"], filled_path, valid_data)
+                result = attach_schema_conformance(result, spec, endpoint)
                 result["test_type"] = "valid"
                 result["category"] = constants.VALID_DATA
                 result["field"] = None
@@ -60,6 +69,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 if category_filter is not None and case["category"] not in category_filter:
                     continue
                 result = execute_test(base_url, endpoint["method"], filled_path, case["data"])
+                result = attach_schema_conformance(result, spec, endpoint)
                 result["test_type"] = "invalid"
                 result["category"] = case["category"]
                 result["field"] = case["field"]
@@ -78,6 +88,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
         if endpoint["method"] == "GET" and "{" not in endpoint["path"]:
             if category_filter is None or "list_endpoint" in category_filter:
                 result = execute_test(base_url, endpoint["method"], endpoint["path"], data=None)
+                result = attach_schema_conformance(result, spec, endpoint)
                 result["test_type"] = "list_get"
                 result["category"] = constants.LIST_ENDPOINT
                 result["field"] = None
@@ -94,6 +105,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     continue
                 test_path = fill_path_params_with_value(endpoint["path"], case["value"])
                 result = execute_test(base_url, endpoint["method"], test_path, data=None)
+                result = attach_schema_conformance(result, spec, endpoint)
                 result["test_type"] = "path_param"
                 result["category"] = case["category"]
                 result["field"] = None
