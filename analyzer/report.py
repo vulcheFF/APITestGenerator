@@ -17,6 +17,14 @@ SEVERITY_MAP = {
 def determine_severity(category: str) -> str:
     return SEVERITY_MAP.get(category, "MEDIUM")
 
+def is_acceptable_error_status(actual_status: int, expected_status: int) -> bool:
+    if actual_status == expected_status:
+        return True
+    if 400 <= actual_status < 500:
+        return True
+
+    return False
+
 
 
 def analyze_results(results: list[dict])-> dict:
@@ -43,8 +51,22 @@ def analyze_results(results: list[dict])-> dict:
             })
             continue
         
+        if expected is None:
+            passed.append({
+                "method": r["method"],
+                "path": r["path"],
+                "category": r.get("category"),
+                "field": r.get("field"),
+                "description": r["description"],                
+                "status_code": actual,
+            })
+            continue
 
-        if expected is not None and actual != expected:
+        is_ok = (
+            is_acceptable_error_status(actual,expected) if expected >=400 else actual == expected
+        )
+
+        if not is_ok:    
             issues.append({
                 "method": r["method"],
                 "path": r["path"],
@@ -67,33 +89,6 @@ def analyze_results(results: list[dict])-> dict:
             })
 
 
-
-        # # при invalid тест има грешка, но получавваме 200 или 201 тоест има някакъв бъг
-        # if r["test_type"] == "invalid" and r["status_code"] <400:
-        #     issues.append({
-        #         "method": r["method"],
-        #         "path": r["path"],
-        #         "description": r["description"],
-        #         "status_code": r["status_code"],
-        #         "severity": "HIGH",
-
-        #     })
-
-        # # при валид тест има грешка "? -> има бъг - фейк зелено
-        # if r["test_type"] == "valid" and r["status_code"] >= 400:
-        #     issues.append({
-        #         "method": r["method"],
-        #         "path": r["path"],
-        #         "description": r["description"],
-        #         "status_code": r["status_code"],
-        #         "severity": "HIGH",
-
-        #     })
-        # if r["test_type"]=="path_param":
-        #     issue = check_path_param_issue(r)
-        #     if issue:
-        #         issues.append(issue)
-
     return {
         "total_tests": total,
         "issues_found": len(issues),
@@ -102,31 +97,6 @@ def analyze_results(results: list[dict])-> dict:
         "passed": passed,
 
     }
-
-
-# def check_path_param_issue(r: dict) -> dict | None:
-#     case_id = r["case_id"]
-#     status = r["status_code"]
-
-#     if case_id == "valid_id" and status >=400:
-#         severity = "HIGH"
-#     elif case_id == "nonexistent_id" and status < 400:
-#         severity = "HIGH"
-#     elif case_id == "invalid_format" and status < 400:
-#         severity = "MEDIUM"
-#     elif case_id == "negative_id" and status < 400:
-#         severity = "LOW"
-#     else:
-#         return None
-
-#     return {
-#         "method": r["method"],
-#         "path": r["path"],
-#         "description": r["description"],
-#         "status_code": status,
-#         "severity": severity,
-#     }
-
 
 
 def print_report(analysis: dict, show_passed: bool = True):

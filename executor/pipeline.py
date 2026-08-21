@@ -45,11 +45,11 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["expected_status"] = 200
                 result["description"] = "Valid data"
                 results.append(result)
-                if result["status_code"] == 500:
-                    print("DEBUG 500 ERROR")
-                    print("Method:", endpoint["method"], "Path:", filled_path)
-                    print("Sent:", valid_data)
-                    print("Response:", result["response_body"])
+                # if result["status_code"] == 500:
+                #     print("DEBUG 500 ERROR")
+                #     print("Method:", endpoint["method"], "Path:", filled_path)
+                #     print("Sent:", valid_data)
+                #     print("Response:", result["response_body"])
                 # if result["status_code"] != 200:
                 #     print("DEBUG valid_data FAILED")
                 #     print("Sent:", valid_data)

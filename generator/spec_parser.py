@@ -16,8 +16,10 @@ def extract_endpoints(spec: dict) -> list[dict]:
                 "path": path,
                 "method": method.upper(),
                 "parameters": details.get("parameters",[]),
-                "request_body": details.get("requestBody",{})
+                "request_body": details.get("requestBody",{}),
+                "responses": details.get("responses", {}),
             })
+
     return endpoints
 
 
@@ -43,6 +45,18 @@ def get_request_body_schema(spec: dict, endpoint: dict) -> dict | None:
         return resolve_schema_ref(spec, schema_ref["$ref"])
     return schema_ref
 
+def get_response_schema(spec: dict, endpoint: dict, status_code: str) -> dict | None:
+    responses = endpoint.get("responses", {})
+    response = responses.get(status_code, {})
+
+    content = response.get("content", {})
+    json_content = content.get("application/json", {})
+    schema_ref = json_content.get("schema", {})
+
+    if "$ref" in schema:
+        return resolve_schema_ref(spec, schema_ref["$ref"])
+
+    return schema_ref if schema_ref else None
 
 
 
