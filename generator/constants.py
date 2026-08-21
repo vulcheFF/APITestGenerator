@@ -1,3 +1,6 @@
+#GET
+LIST_ENDPOINT = "list_endpoint"
+
 # body val (POST/PUT)
 TYPE_MISMATCH = "type_mismatch"
 MISSING_REQUIRED = "missing_required"
@@ -5,6 +8,7 @@ BOUNDARY_NUMERIC = "boundary_numeric"
 BOUNDARY_STRING = "boundary_string"
 INVALID_ENUM = "invalid_enum"
 INVALID_BOOLEAN = "invalid_boolean"
+INVALID_PATTERN = "invalid_pattern"
 NEGATIVE_VALUE = "negative_value"
 VALID_DATA = "valid_data"
 

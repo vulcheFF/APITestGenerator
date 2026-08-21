@@ -5,7 +5,7 @@ class Book(BaseModel):
     id: int
     title: str
     author: str
-    isbn: str
+    isbn: str = Field(pattern = r"^\d{13}$")
     price: float
     quantity: int
     published_date: date

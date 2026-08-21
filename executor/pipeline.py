@@ -1,4 +1,5 @@
 import re
+import random
 from generator import constants
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories
@@ -15,7 +16,10 @@ def fill_path_params_with_value(path: str, value: str) -> str:
     return re.sub(r"\{[^}]+\}", value, path)
 
 
-def run_all_tests(base_url: str, category_filter: list[str] = None) -> tuple[list[dict], list[dict]]:
+def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None) -> tuple[list[dict], list[dict]]:
+    if seed is not None:
+        random.seed(seed)
+
     spec = fetch_openapi_spec(base_url)
     endpoints = extract_endpoints(spec)
     results = []
@@ -41,7 +45,15 @@ def run_all_tests(base_url: str, category_filter: list[str] = None) -> tuple[lis
                 result["expected_status"] = 200
                 result["description"] = "Valid data"
                 results.append(result)
-
+                if result["status_code"] == 500:
+                    print("DEBUG 500 ERROR")
+                    print("Method:", endpoint["method"], "Path:", filled_path)
+                    print("Sent:", valid_data)
+                    print("Response:", result["response_body"])
+                # if result["status_code"] != 200:
+                #     print("DEBUG valid_data FAILED")
+                #     print("Sent:", valid_data)
+                #     print("Error:", result["response_body"])
 
             #невалидни
             for case in generate_invalid_objects(schema):
@@ -61,6 +73,20 @@ def run_all_tests(base_url: str, category_filter: list[str] = None) -> tuple[lis
                     "method": endpoint["method"],
                     **skipped,
                 })
+
+                
+        if endpoint["method"] == "GET" and "{" not in endpoint["path"]:
+            if category_filter is None or "list_endpoint" in category_filter:
+                result = execute_test(base_url, endpoint["method"], endpoint["path"], data=None)
+                result["test_type"] = "list_get"
+                result["category"] = constants.LIST_ENDPOINT
+                result["field"] = None
+                result["expected_status"] = 200
+                result["description"] = "Get list endpoint (no filters)"
+                results.append(result)
+
+
+
 
         if endpoint["method"] in ("GET", "DELETE") and "{" in endpoint["path"]:
             for case in generate_path_param_cases():

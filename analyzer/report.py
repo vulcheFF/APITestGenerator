@@ -1,10 +1,12 @@
 SEVERITY_MAP = {
+    "list_endpoint": "HIGH", 
     "type_mismatch": "HIGH",
     "missing_required": "HIGH",
     "boundary_numeric": "HIGH",
     "boundary_string": "MEDIUM",
     "invalid_enum": "MEDIUM",
     "invalid_boolean": "MEDIUM",
+    "invalid_pattern": "MEDIUM",
     "nonexistent_id": "HIGH",
     "invalid_id_format": "MEDIUM",
     "negative_id": "LOW",
@@ -25,6 +27,22 @@ def analyze_results(results: list[dict])-> dict:
     for r in results:
         expected = r.get("expected_status")
         actual = r["status_code"]
+
+
+        if r.get("error"):
+            issues.append({
+                "method": r["method"],
+                "path": r["path"],
+                "category": r.get("category"),
+                "field": r.get("field"),
+                "description": f"Request failed: {r['error']}",
+                "expected_status": expected,
+                "status_code": None,
+                "severity": "HIGH",
+
+            })
+            continue
+        
 
         if expected is not None and actual != expected:
             issues.append({

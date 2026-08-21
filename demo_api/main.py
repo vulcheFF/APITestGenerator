@@ -31,11 +31,11 @@ books_db: list[Book] = [
 ]
 
 @app.get("/books")
-def get_books():
+def get_books() -> list[Book]:
     return books_db
 
 @app.get("/books/{book_id}")
-def get_books(book_id: int):
+def get_books(book_id: int) -> Book | dict:
     for book in books_db:
         if book.id == book.id:
             return book
@@ -43,22 +43,22 @@ def get_books(book_id: int):
     return {}
 
 @app.post("/books")
-def create_book(book: Book):
+def create_book(book: Book) -> Book:
     books_db.append(book)
     #добавяме без проверки дали има наличност
     return book
 
 @app.put("/books/{book_id}")
-def update_book(book_id: int, updated_book: Book):
+def update_book(book_id: int, updated_book: Book)  -> Book:
     for index, book in enumerate(books_db):
         if book.id == book.id:
             #няма проверки пак
             books_db[index] = updated_book
-            return update_book
+            return updated_book
     raise HTTPException(status_code=404, detail = "Book not found!")
 
 @app.delete("/books/{book_id}")
-def delete_book(book_id: int):
+def delete_book(book_id: int) -> dict:
     for index, book in enumerate(books_db):
         if book.id == book.id:
             del books_db[index]

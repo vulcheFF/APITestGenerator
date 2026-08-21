@@ -1,6 +1,8 @@
 import string
 import random
+import exrex
 from generator import constants
+
 
 def generate_valid_value(field_schema: dict):
     field_type = field_schema.get("type")
@@ -13,8 +15,12 @@ def generate_valid_value(field_schema: dict):
 
 
     if field_type == "string":
+        if field_schema.get("pattern"):
+            return exrex.getone(field_schema["pattern"])
+
         if field_schema.get("format") == "date":
             return "2020-01-01"
+        
         min_length = field_schema.get("minLength",1)
         max_length = field_schema.get("maxLength",8)
         length = random.randint(min_length, max_length)
@@ -176,6 +182,18 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
                 "description": f"Value outside enum list for field '{field_name}'",
                 "data": obj,
             })
+
+        #invalid pattern (regex)
+        if field_type == "string" and field_schema.get("pattern"):
+            obj = generate_valid_object(schema)
+            obj[field_name] = "###DOES_NOT_MATCH_PATTERN###"
+            test_cases.append({
+                "category": constants.INVALID_PATTERN,
+                "field": field_name,
+                "expected_status": 422,
+                "description": f"Value does not match required pattern for field '{field_name}'",
+                "data": obj,
+            })
    
     # missing req
     for field_name in required_fields:
@@ -222,6 +240,13 @@ def get_skipped_categories(schema: dict) -> list[dict]:
     if not any(p.get("type") == "boolean" for p in properties.values()):
         skipped.append({
             "category": constants.INVALID_BOOLEAN,
+            "reason": "No boolean field in the schema"
+        })
+
+    has_pattern = any(p.get("type") == "string" and p.get("pattern") for p in properties.values())
+    if not has_pattern:
+        skipped.append({
+            "category": constants.INVALID_PATTERN,
             "reason": "No boolean field in the schema"
         })
 
