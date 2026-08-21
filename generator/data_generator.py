@@ -18,7 +18,9 @@ def generate_valid_value(field_schema: dict):
         if field_schema.get("pattern"):
             return exrex.getone(field_schema["pattern"])
 
-        if field_schema.get("format") == "date":
+        if field_schema.get("format") in ("date", "date-time"):
+            if field_schema.get("format") == "date-time":
+                return "2020-01-01T00:00:00Z"
             return "2020-01-01"
         
         min_length = field_schema.get("minLength",1)

@@ -47,7 +47,7 @@ def get_request_body_schema(spec: dict, endpoint: dict) -> dict | None:
 
 def get_response_schema(spec: dict, endpoint: dict, status_code: str) -> dict | None:
     responses = endpoint.get("responses", {})
-    response = responses.get(status_code, {})
+    response = responses.get(status_code, {}) or responses.get("default", {})
 
     content = response.get("content", {})
     json_content = content.get("application/json", {})
