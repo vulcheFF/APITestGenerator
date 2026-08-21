@@ -58,6 +58,12 @@ def get_response_schema(spec: dict, endpoint: dict, status_code: str) -> dict | 
 
     return schema_ref if schema_ref else None
 
+def get_path_param_schema(endpoint: dict) -> dict | None:
+    for param in endpoint.get("parameters", []):
+        if param.get("in") == "path":
+            return param.get("schema", {})
+    return None
+
 
 
 if __name__ == "__main__":
