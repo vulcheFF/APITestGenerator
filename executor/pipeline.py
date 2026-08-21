@@ -2,7 +2,7 @@ import re
 import random
 from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
-from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema
+from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories
 from generator.path_param_generator import generate_path_param_cases
 from executor.test_runner import execute_test
@@ -100,7 +100,8 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
 
         if endpoint["method"] in ("GET", "DELETE") and "{" in endpoint["path"]:
-            for case in generate_path_param_cases():
+            param_schema = get_path_param_schema(endpoint)
+            for case in generate_path_param_cases(param_schema):
                 if category_filter is not None and case["category"] not in category_filter:
                     continue
                 test_path = fill_path_params_with_value(endpoint["path"], case["value"])

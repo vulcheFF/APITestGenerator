@@ -57,9 +57,9 @@ def _generate_string_cases(param_schema: dict) -> list[dict]:
         },
         {
             "category": constants.NONEXISTENT_ID,
-            "value": "existing-item",
+            "value": "difinitely-does-not-exist-123xyz",
             "expected_status": 404,
-            "description": "Valid existing identifier",
+            "description": "Non-existent identifier",
         },
     ]
 
@@ -68,7 +68,7 @@ def _generate_string_cases(param_schema: dict) -> list[dict]:
             "category": constants.INVALID_PATTERN,
             "value": "###does-not-match-pattern###",
             "expected_status": 422,
-            "description": "Valid existing identifier",
+            "description": "Value does not match declared pattern",
         })
 
     return cases
