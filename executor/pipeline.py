@@ -10,8 +10,21 @@ from analyzer.report import analyze_results, print_report
 from storage.repository import save_run
 from storage.database import init_db
 
-def fill_path_params(path: str) -> str:
-    return re.sub(r"\{[^}]+\}", "1", path)
+
+def get_default_path_value(param_schema: dict | None) -> str:
+    param_type = (param_schema or {}).get("type", "integer")
+    if param_type == "integer":
+        return "1"
+    if param_type == "string":
+        return "existing-item"
+    if param_type == "number":
+        return "1.5"
+    if param_type == "boolean":
+        return "1"
+
+def fill_path_params(path: str, param_schema: dict | None = None) -> str:
+    value = get_default_path_value(param_schema)
+    return re.sub(r"\{[^}]+\}", value, path)
 
 def fill_path_params_with_value(path: str, value: str) -> str:
     return re.sub(r"\{[^}]+\}", value, path)
@@ -40,18 +53,17 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
     all_skipped = []
 
     for endpoint in endpoints:
+
         if endpoint["method"] in ("POST", "PUT"):
             schema = get_request_body_schema(spec, endpoint)
-            #print("DEBUG SCHEMA FOR", endpoint["path"], ":", schema)
             if not schema:
                 continue
-
-            filled_path = fill_path_params(endpoint["path"])
-
-
+            path_param_schema = get_path_param_schema(endpoint)
+            filled_path = fill_path_params(endpoint["path"], path_param_schema)
             if category_filter is None or constants.VALID_DATA in category_filter:
                 #валидни
                 valid_data = generate_valid_object(schema)
+                
                 result = execute_test(base_url, endpoint["method"], filled_path, valid_data)
                 result = attach_schema_conformance(result, spec, endpoint)
                 result["test_type"] = "valid"
@@ -60,15 +72,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["expected_status"] = 200
                 result["description"] = "Valid data"
                 results.append(result)
-                # if result["status_code"] == 500:
-                #     print("DEBUG 500 ERROR")
-                #     print("Method:", endpoint["method"], "Path:", filled_path)
-                #     print("Sent:", valid_data)
-                #     print("Response:", result["response_body"])
-                # if result["status_code"] != 200:
-                #     print("DEBUG valid_data FAILED")
-                #     print("Sent:", valid_data)
-                #     print("Error:", result["response_body"])
+
 
             #невалидни
             for case in generate_invalid_objects(schema):
