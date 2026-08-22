@@ -99,7 +99,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 if required_params:
                     #valid req - valid values for req params
                     valid_query = {
-                        p["name"]: generate_valid_value(p["schema"]) for p in required_params
+                        p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params
                     }
                     test_path = endpoint["path"] + build_query_string(valid_query)
                     result = execute_test(base_url, endpoint["method"], test_path, data=None)
@@ -112,14 +112,19 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     results.append(result)
 
                     #invalid - without req params
-                    result = execute_test(base_url, endpoint["method"], endpoint["path"], data = None)
-                    result = attach_schema_conformance(result, spec, endpoint)
-                    result["test_type"] = "list_get"
-                    result["category"] = constants.MISSING_REQUIRED
-                    result["field"] = required_params[0]["name"]
-                    result["expected_status"] = 422
-                    result["description"] = f"Missing required query param '{required_params[0]['name']}'"
-                    results.append(result)
+                    for missing_param in required_params:
+                        partial_query = {
+                            p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params if p["name"] != missing_param["name"]
+                        }
+                        test_path = endpoint["path"] + build_query_string(partial_query)
+                        result = execute_test(base_url, endpoint["method"], endpoint["path"], data = None)
+                        result = attach_schema_conformance(result, spec, endpoint)
+                        result["test_type"] = "list_get"
+                        result["category"] = constants.MISSING_REQUIRED_QUERY_PARAM
+                        result["field"] = required_params[0]["name"]
+                        result["expected_status"] = 422
+                        result["description"] = f"Missing required query param '{required_params[0]['name']}'"
+                        results.append(result)
                 else:
                     #no req params
                     result = execute_test(base_url, endpoint["method"], endpoint["path"], data=None)

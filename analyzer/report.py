@@ -15,6 +15,7 @@ SEVERITY_MAP = {
     constants.VALID_ID: "HIGH",
     constants.NEGATIVE_VALUE: "INFO",  # fake pass probability - manual check
     constants.RESPONSE_SCHEMA_MISMATCH: "MEDIUM",
+    constants.MISSING_REQUIRED_QUERY_PARAM: "HIGH",
 }
 
 def determine_severity(category: str) -> str:
