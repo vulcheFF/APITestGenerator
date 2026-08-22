@@ -43,6 +43,18 @@ def build_query_string(params: dict) -> str:
     parts = [f"{key}={value}" for key, value in params.items()]
     return "?" + "&".join(parts)
 
+def find_id_like_field(schema: dict, path_param_name: str = None) -> str | None:
+    properties = schema.get("properties", {})
+
+    if path_param_name and path_param_name in properties:
+        return path_param_name
+
+    for field_name, field_schema in properties.items():
+        if "id" in field_name.lower() and field_schema.get("type") == "integer":
+            return field_name
+
+    return None
+
 def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None) -> tuple[list[dict], list[dict]]:
     if seed is not None:
         random.seed(seed)
@@ -58,11 +70,26 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
             schema = get_request_body_schema(spec, endpoint)
             if not schema:
                 continue
+
             path_param_schema = get_path_param_schema(endpoint)
             filled_path = fill_path_params(endpoint["path"], path_param_schema)
+
             if category_filter is None or constants.VALID_DATA in category_filter:
                 #валидни
                 valid_data = generate_valid_object(schema)
+                if endpoint["method"] == "PUT" and "{" in endpoint["path"]:
+                    path_param_match = re.search(r"\{([^}]+)\}", endpoint["path"])
+                    path_param_name = path_param_match.group(1) if path_param_match else None
+
+                    id_field = find_id_like_field(schema, path_param_name)
+                    if id_field and path_param_schema:
+                        path_value = get_default_path_value(path_param_schema)
+                        if path_param_schema.get("type") == "integer":
+                            valid_data[id_field] = int(path_value)
+                        elif path_param_schema.get("type") == "number":
+                            valid_data[id_field] = float(path_value)
+                        else:
+                            valid_data[id_field] = path_value
                 
                 result = execute_test(base_url, endpoint["method"], filled_path, valid_data)
                 result = attach_schema_conformance(result, spec, endpoint)
