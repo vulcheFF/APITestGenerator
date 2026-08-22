@@ -16,7 +16,25 @@ SEVERITY_MAP = {
     constants.NEGATIVE_VALUE: "INFO",  # fake pass probability - manual check
     constants.RESPONSE_SCHEMA_MISMATCH: "MEDIUM",
     constants.MISSING_REQUIRED_QUERY_PARAM: "HIGH",
+    constants.VALID_DATA: "HIGH",
+    constants.MALFORMED_JSON: "HIGH",
 }
+
+
+#for visibility might remove it later
+STATUS_COLORS = {
+    "HIGH": "\033[91m",
+    "MEDIUM": "\033[93m",
+    "LOW": "\033[94m",
+    "INFO": "\033[90m",
+    "PASS": "\033[92m",
+}
+RESET_COLOR = "\033[0m"
+
+
+def colorize_status(severity: int) -> str:
+    color = STATUS_COLORS.get(severity, "")
+    return f"{color}{severity}{RESET_COLOR}"
 
 def determine_severity(category: str) -> str:
     return SEVERITY_MAP.get(category, "MEDIUM")
@@ -129,14 +147,14 @@ def print_report(analysis: dict, show_passed: bool = True):
     if issues_count:
         print("\nISSUES:")
         for issue in analysis['issues']:
-            print(f"[{issue['severity']}] {issue['method']} {issue['path']} {issue['category']}")
+            print(f"[{colorize_status(issue['severity'])}] {issue['method']} {issue['path']} {issue['category']}")
             print(f"    {issue['description']} -> expected {issue['expected_status']} got {issue['status_code']}")
 
     if show_passed:
         if passed_count:
             print("\nPASSED:")
             for p in analysis['passed']:
-                print(f"[PASS] [{p['method']}] {p['path']} {p['category']} - {p['description']}")
+                print(f"[{colorize_status('PASS')}] [{p['method']}] {p['path']} {p['category']} - {p['description']}")
           
 
     

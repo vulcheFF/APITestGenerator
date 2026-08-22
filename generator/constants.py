@@ -13,6 +13,7 @@ NEGATIVE_VALUE = "negative_value"
 VALID_DATA = "valid_data"
 RESPONSE_SCHEMA_MISMATCH = "response_schema_mismatch"
 MISSING_REQUIRED_QUERY_PARAM = "missing_required_query_param"
+MALFORMED_JSON = "malformed_json"
 
 #path params
 VALID_ID = "valid_id"

@@ -5,6 +5,7 @@ from generator import constants
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value
 from generator.path_param_generator import generate_path_param_cases
+from generator.malformed_json_generator import generate_malformed_json_cases
 from executor.test_runner import execute_test
 from analyzer.report import analyze_results, print_report
 from storage.repository import save_run
@@ -124,6 +125,17 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["description"] = case["description"]
                 results.append(result)
 
+            if category_filter is  None or constants.MALFORMED_JSON in category_filter:
+                for case in generate_malformed_json_cases():
+                    result = execute_test(base_url, endpoint["method"], filled_path, raw_body=case["body"])
+                    # result = attach_schema_conformance(result, spec, endpoint)
+                    result["test_type"] = "invalid"
+                    result["category"] = constants.MALFORMED_JSON
+                    result["field"] = None
+                    result["expected_status"] = 400
+                    result["description"] = case["description"]
+                    results.append(result)     
+
             for skipped in get_skipped_categories(schema):
                 all_skipped.append({
                     "path": endpoint["path"],
@@ -162,9 +174,9 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         result = attach_schema_conformance(result, spec, endpoint)
                         result["test_type"] = "list_get"
                         result["category"] = constants.MISSING_REQUIRED_QUERY_PARAM
-                        result["field"] = required_params[0]["name"]
+                        result["field"] = missing_param["name"]
                         result["expected_status"] = 422
-                        result["description"] = f"Missing required query param '{required_params[0]['name']}'"
+                        result["description"] = f"Missing required query param '{missing_param["name"]}'"
                         results.append(result)
                 else:
                     #no req params
@@ -194,8 +206,6 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
     return results, all_skipped
 
-
-
 if __name__ == "__main__":
     init_db()
 
@@ -210,17 +220,3 @@ if __name__ == "__main__":
 
     run_id = save_run("http://127.0.0.1:8000", results, analysis)
     print(f"\nSaved as run#{run_id}")
-
-
-
-
-
-
-    # for res in results:
-    #     print(res["method"], res["path"], "-", res["description"], "->", res["status_code"])
-    #     # if res["status_code"] == 422:
-    #     #     print("   Sent:", res["data_sent"])
-    #     #     print("   Error:", res["response_body"])
-    #     # if res["description"] == "Valid data" and res["status_code"] == 422:
-    #     #     print("   Sent:", res["data_sent"])
-    #     #     print("   Error:", res["response_body"])

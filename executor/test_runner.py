@@ -3,17 +3,20 @@ import requests
 DEFAULT_TIMEOUT = 5 #sec
 
 
-def execute_test(base_url: str, method: str, path: str, data: dict = None) -> dict:
+def execute_test(base_url: str, method: str, path: str, data: dict = None, raw_body: str = None) -> dict:
     url = f"{base_url}{path}"
 
     try:
-        response = requests.request(method=method, url=url, json=data, timeout=DEFAULT_TIMEOUT)
+        if raw_body is not None:
+            response = requests.request(method=method, url=url, data = raw_body.encode("utf-8"), headers={"Content-Type":"application/json"}, timeout=DEFAULT_TIMEOUT)
+        else:
+            response = requests.request(method=method, url=url, json=data, timeout=DEFAULT_TIMEOUT)
 
     except requests.exceptions.RequestException as e:
         return {
             "method": method,
             "path": path,
-            "data_sent": data,
+            "data_sent": raw_body if raw_body is not None else data,
             "status_code": None,
             "response_body": None,
             "error": str(e),
@@ -23,9 +26,10 @@ def execute_test(base_url: str, method: str, path: str, data: dict = None) -> di
     return {
         "method": method,
         "path": path,
-        "data_sent": data,
+        "data_sent": raw_body if raw_body is not None else data,
         "status_code": response.status_code,
         "response_body": safe_json(response),
+        "error": None,
     }
 
 
