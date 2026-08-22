@@ -6,7 +6,7 @@ class Book(BaseModel):
     title: str
     author: str
     isbn: str = Field(pattern = r"^\d{13}$")
-    price: float
-    quantity: int
+    price: float = Field(gt=0, description="Price is positive")
+    quantity: int = Field(ge=0, description="Quantity can't be negative")
     published_date: date
     genre: str

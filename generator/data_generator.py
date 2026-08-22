@@ -29,16 +29,46 @@ def generate_valid_value(field_schema: dict):
         return "".join(random.choices(string.ascii_letters, k = length))
 
     if field_type == "integer":
-        minimum = field_schema.get("minimum",1)
-        maximum = field_schema.get("maximum",100)
+        minimum = field_schema.get("minimum")
+        exclusive_min = field_schema.get("exclusiveMinimum")
+        if exclusive_min is not None:
+            minimum = int(exclusive_min)+1
+        elif minimum is not None:
+            minimum = int(minimum)
+        else:
+            minimum = 1
+
+
+
+        maximum = field_schema.get("maximum")
+        exclusive_max = field_schema.get("exclusiveMaximum")
+        if exclusive_max is not None:
+            maximum = int(exclusive_max)-1
+        elif maximum is not None:
+            maximum = int(maximum)
+        else:
+            maximum = 100
+
         return random.randint(minimum, maximum)
 
     if field_type == "number":
-        minimum = field_schema.get("minimum",1)
-        maximum = field_schema.get("maximum",100)
+        minimum = field_schema.get("minimum")
+        exclusive_min = field_schema.get("exclusiveMinimum")
+        if exclusive_min is not None:
+            minimum = exclusive_min + 0.01
+        elif minimum is  None:
+            minimum = 1
+
+        maximum = field_schema.get("maximum")
+        exclusive_max = field_schema.get("exclusiveMaximum")
+        if exclusive_max is not None:
+            maximum = exclusive_max- 0.01
+        elif maximum is  None:
+            maximum = 100
+
         return round(random.uniform(minimum, maximum),2)
 
-    return None #mroe to come
+    return None
 
 
 
@@ -98,7 +128,7 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
         })
 
         #info for false positive - negative numbers
-        if field_type in ("integer", "number") and field_schema.get("minimum") is None:
+        if (field_type in ("integer", "number") and field_schema.get("minimum") is None and field_schema.get("exclusiveMinimum") is None):
             obj = generate_valid_object(schema)
             obj[field_name] = -abs(_valid_value_for_negative_test(field_schema))
             test_cases.append({
@@ -112,30 +142,46 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
                 "data": obj,          
             })
 
-
         #boundary numeric - minimum
-        if field_type in ("integer", "number") and field_schema.get("minimum") is not None:
-            obj = generate_valid_object(schema)
-            obj[field_name] = field_schema["minimum"] - 1
-            test_cases.append({
-                "category": constants.BOUNDARY_NUMERIC,
-                "field": field_name,
-                "expected_status": 422,
-                "description": f"Value below minimum for field '{field_name}'",
-                "data": obj,
-            })
+        if field_type in ("integer", "number"):
+            minimum = field_schema.get("minimum")
+            exclusive_minimum = field_schema.get("exclusiveMinimum")
+            invalid_value = None
+            if exclusive_minimum is not None:
+                invalid_value = exclusive_minimum
+            elif minimum is not None:
+                invalid_value = minimum - 1
+            if invalid_value is not None:
+                obj = generate_valid_object(schema)
+                obj[field_name] = invalid_value
+                test_cases.append({
+                    "category": constants.BOUNDARY_NUMERIC,
+                    "field": field_name,
+                    "expected_status": 422,
+                    "description": f"Value at/below minimum boundary for field '{field_name}'",
+                    "data": obj,
+                })
 
         #boundary numeric - maximum
-        if field_type in ("integer", "number") and field_schema.get("maximum") is not None:
-            obj = generate_valid_object(schema)
-            obj[field_name] = field_schema["maximum"] + 1
-            test_cases.append({
-                "category": constants.BOUNDARY_NUMERIC,
-                "field": field_name,
-                "expected_status": 422,
-                "description": f"Value above maximum for field '{field_name}'",
-                "data": obj,
-            })
+        if field_type in ("integer", "number"):
+            maximum = field_schema.get("maximum")
+            exclusive_maximum = field_schema.get("exclusiveMaximum")
+
+            invalid_value = None
+            if exclusive_maximum is not None:
+                invalid_value = exclusive_maximum
+            elif maximum is not None:
+                invalid_value = maximum + 1
+            if invalid_value is not None:
+                obj = generate_valid_object(schema)
+                obj[field_name] = invalid_value
+                test_cases.append({
+                    "category": constants.BOUNDARY_NUMERIC,
+                    "field": field_name,
+                    "expected_status": 422,
+                    "description": f"Value at/above maximum for field '{field_name}'",
+                    "data": obj,
+                })
 
         #boundary string - minLength
         if field_type == "string" and field_schema.get("minLength") is not None:
@@ -216,13 +262,13 @@ def get_skipped_categories(schema: dict) -> list[dict]:
     properties = schema.get("properties", {})
     skipped = []
 
-    has_min = any(p.get("type") in ("integer", "number") and p.get("minimum") is not None for p in properties.values())
-    has_max = any(p.get("type") in ("integer", "number") and p.get("maximum") is not None for p in properties.values())
+    has_min = any(p.get("type") in ("integer", "number") and p.get("minimum") is not None or p.get("exclusiveMinimum") is not None for p in properties.values())
+    has_max = any(p.get("type") in ("integer", "number") and p.get("maximum") is not None or p.get("exclusiveMaximum") is not None for p in properties.values())
 
     if not has_min and not has_max:
         skipped.append({
             "category": constants.BOUNDARY_NUMERIC,
-            "reason": "No numeric field has 'minimum' or 'maximum' in the schema"
+            "reason": "No numeric field has 'minimum'/'exclusiveMinimum' or 'maximum'/'exclusiveMaximum' in the schema",
         })
 
     has_minLength = any(p.get("type")=="string" and p.get("minLength") is not None for p in properties.values())
@@ -230,13 +276,13 @@ def get_skipped_categories(schema: dict) -> list[dict]:
     if not has_minLength and not has_maxLength :
         skipped.append({
             "category": constants.BOUNDARY_STRING,
-            "reason": "No string field has 'minLength' or 'maxLength' in the schema"
+            "reason": "No string field has 'minLength' or 'maxLength' in the schema",
         })
 
     if not any("enum" in p for p in properties.values()):
         skipped.append({
             "category": constants.INVALID_ENUM,
-            "reason": "No field has enum in the schema"
+            "reason": "No field has enum in the schema",
         })
 
     if not any(p.get("type") == "boolean" for p in properties.values()):
@@ -249,7 +295,7 @@ def get_skipped_categories(schema: dict) -> list[dict]:
     if not has_pattern:
         skipped.append({
             "category": constants.INVALID_PATTERN,
-            "reason": "No boolean field in the schema"
+            "reason": "No string field has 'pattern' in the schema"
         })
 
     return skipped
