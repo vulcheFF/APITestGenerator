@@ -14,7 +14,7 @@ VALID_DATA = "valid_data"
 RESPONSE_SCHEMA_MISMATCH = "response_schema_mismatch"
 MISSING_REQUIRED_QUERY_PARAM = "missing_required_query_param"
 MALFORMED_JSON = "malformed_json"
-
+WRONG_CONTENT_TYPE = "wrong_content_type"
 #path params
 VALID_ID = "valid_id"
 NONEXISTENT_ID = "nonexistent_id"

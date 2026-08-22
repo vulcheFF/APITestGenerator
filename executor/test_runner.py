@@ -3,12 +3,12 @@ import requests
 DEFAULT_TIMEOUT = 5 #sec
 
 
-def execute_test(base_url: str, method: str, path: str, data: dict = None, raw_body: str = None) -> dict:
+def execute_test(base_url: str, method: str, path: str, data: dict = None, raw_body: str = None, content_type: str = "application/json") -> dict:
     url = f"{base_url}{path}"
 
     try:
         if raw_body is not None:
-            response = requests.request(method=method, url=url, data = raw_body.encode("utf-8"), headers={"Content-Type":"application/json"}, timeout=DEFAULT_TIMEOUT)
+            response = requests.request(method=method, url=url, data = raw_body.encode("utf-8"), headers={"Content-Type":content_type}, timeout=DEFAULT_TIMEOUT)
         else:
             response = requests.request(method=method, url=url, json=data, timeout=DEFAULT_TIMEOUT)
 

@@ -18,6 +18,7 @@ SEVERITY_MAP = {
     constants.MISSING_REQUIRED_QUERY_PARAM: "HIGH",
     constants.VALID_DATA: "HIGH",
     constants.MALFORMED_JSON: "HIGH",
+    constants.WRONG_CONTENT_TYPE: "MEDIUM",
 }
 
 

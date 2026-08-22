@@ -135,6 +135,16 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["expected_status"] = 400
                     result["description"] = case["description"]
                     results.append(result)     
+            if category_filter is  None or constants.WRONG_CONTENT_TYPE in category_filter:
+                valid_data_for_ct_test = generate_valid_object(schema)
+                import json as json_module
+                result = execute_test(base_url, endpoint["method"], filled_path, raw_body=json_module.dumps(valid_data_for_ct_test), content_type="text/plain")
+                result["test_type"] = "invalid"
+                result["category"] = constants.WRONG_CONTENT_TYPE
+                result["field"] = None
+                result["expected_status"] = 400
+                result["description"] = "Valid JSON body with wrong Content-Type (text/plain)"
+                results.append(result)
 
             for skipped in get_skipped_categories(schema):
                 all_skipped.append({
