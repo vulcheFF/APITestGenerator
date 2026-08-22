@@ -50,10 +50,20 @@ def find_id_like_field(schema: dict, path_param_name: str = None) -> str | None:
         return path_param_name
 
     for field_name, field_schema in properties.items():
-        if "id" in field_name.lower() and field_schema.get("type") == "integer":
+        if field_schema.get("type") != "integer":
+            continue
+        if _is_id_like_name(field_name):
             return field_name
 
     return None
+
+def _is_id_like_name(field_name: str) -> bool:
+    #snake_case
+    snake_parts = field_name.lower().split("_")
+    if "id" in snake_parts:
+        return True
+    camel_parts = re.findall(r'[A-Z]+(?=[A-Z][a-z]|\b)|[A-Z][a-z0-9]*|[a-z0-9]+', field_name)
+    return any(part.lower() == "id" for part in camel_parts)
 
 def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None) -> tuple[list[dict], list[dict]]:
     if seed is not None:
