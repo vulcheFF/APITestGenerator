@@ -2,8 +2,8 @@ import re
 import random
 from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
-from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema
-from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories
+from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema
+from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value
 from generator.path_param_generator import generate_path_param_cases
 from executor.test_runner import execute_test
 from analyzer.report import analyze_results, print_report
@@ -23,6 +23,12 @@ def attach_schema_conformance(result: dict, spec: dict, endpoint: dict) -> dict:
     else:
         result["schema_conformance_errors"] = None
     return result
+
+def build_query_string(params: dict) -> str:
+    if not params:
+        return ""
+    parts = [f"{key}={value}" for key, value in params.items()]
+    return "?" + "&".join(parts)
 
 def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None) -> tuple[list[dict], list[dict]]:
     if seed is not None:
@@ -86,18 +92,44 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
                 
         if endpoint["method"] == "GET" and "{" not in endpoint["path"]:
-            if category_filter is None or "list_endpoint" in category_filter:
-                result = execute_test(base_url, endpoint["method"], endpoint["path"], data=None)
-                result = attach_schema_conformance(result, spec, endpoint)
-                result["test_type"] = "list_get"
-                result["category"] = constants.LIST_ENDPOINT
-                result["field"] = None
-                result["expected_status"] = 200
-                result["description"] = "Get list endpoint (no filters)"
-                results.append(result)
+            query_params = get_query_params_schema(endpoint)
+            required_params = [p for p in query_params if p["required"]]
 
+            if category_filter is None or constants.LIST_ENDPOINT in category_filter:
+                if required_params:
+                    #valid req - valid values for req params
+                    valid_query = {
+                        p["name"]: generate_valid_value(p["schema"]) for p in required_params
+                    }
+                    test_path = endpoint["path"] + build_query_string(valid_query)
+                    result = execute_test(base_url, endpoint["method"], test_path, data=None)
+                    result = attach_schema_conformance(result, spec, endpoint)
+                    result["test_type"] = "list_get"
+                    result["category"] = constants.LIST_ENDPOINT
+                    result["field"] = None
+                    result["expected_status"] = 200
+                    result["description"] = "Get list endpoint with required query params"
+                    results.append(result)
 
-
+                    #invalid - without req params
+                    result = execute_test(base_url, endpoint["method"], endpoint["path"], data = None)
+                    result = attach_schema_conformance(result, spec, endpoint)
+                    result["test_type"] = "list_get"
+                    result["category"] = constants.MISSING_REQUIRED
+                    result["field"] = required_params[0]["name"]
+                    result["expected_status"] = 422
+                    result["description"] = f"Missing required query param '{required_params[0]['name']}'"
+                    results.append(result)
+                else:
+                    #no req params
+                    result = execute_test(base_url, endpoint["method"], endpoint["path"], data=None)
+                    result = attach_schema_conformance(result, spec, endpoint)
+                    result["test_type"] = "list_get"
+                    result["category"] = constants.LIST_ENDPOINT
+                    result["field"] = None
+                    result["expected_status"] = 200
+                    result["description"] = "Get list endpoint (no filters)"
+                    results.append(result)
 
         if endpoint["method"] in ("GET", "DELETE") and "{" in endpoint["path"]:
             param_schema = get_path_param_schema(endpoint)
