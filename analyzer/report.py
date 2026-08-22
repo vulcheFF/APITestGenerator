@@ -148,15 +148,29 @@ def print_report(analysis: dict, show_passed: bool = True):
 
     if issues_count:
         print("\nISSUES:")
+        issues_by_category = {}
+
         for issue in analysis['issues']:
-            print(f"[{colorize_status(issue['severity'])}] {issue['method']} {issue['path']} {issue['category']}")
-            print(f"    {issue['description']} -> expected {issue['expected_status']} got {issue['status_code']}")
+            issues_by_category.setdefault(issue["category"], []).append(issue)
+
+        for category, items in issues_by_category.items():
+            print(f"\n ==={category} ({len(items)}) ===")
+            for issue in items:
+
+                print(f"[{colorize_status(issue['severity'])}] {issue['method']} {issue['path']}") # {issue['category']}
+                print(f"    {issue['description']} -> expected {issue['expected_status']} got {issue['status_code']}")
 
     if show_passed:
         if passed_count:
             print("\nPASSED:")
+            passed_by_category = {}
             for p in analysis['passed']:
-                print(f"[{colorize_status('PASS')}] [{p['method']}] {p['path']} {p['category']} - {p['description']}")
+                passed_by_category.setdefault(p["category"], []).append(p)
+
+            for category, items in passed_by_category.items():
+                print(f"\n ==={category} ({len(items)}) ===")
+                for p in items:
+                    print(f"[{colorize_status('PASS')}] [{p['method']}] {p['path']} - {p['description']}") # {p['category']}
           
 
     
