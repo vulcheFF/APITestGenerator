@@ -3,11 +3,13 @@ import random
 from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema
+from generator.spec_parser import get_declared_methods_for_path, get_undeclared_method
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value
 from generator.path_param_generator import generate_path_param_cases
 from generator.malformed_json_generator import generate_malformed_json_cases
 from executor.test_runner import execute_test
 from analyzer.report import analyze_results, print_report
+from analyzer.header_checks import check_allowed_header_present, check_accept_post_header_present
 from storage.repository import save_run
 from storage.database import init_db
 
@@ -139,11 +141,12 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 valid_data_for_ct_test = generate_valid_object(schema)
                 import json as json_module
                 result = execute_test(base_url, endpoint["method"], filled_path, raw_body=json_module.dumps(valid_data_for_ct_test), content_type="text/plain")
+                has_accept_post_header = check_accept_post_header_present(result.get("response_headers",{}))
                 result["test_type"] = "invalid"
                 result["category"] = constants.WRONG_CONTENT_TYPE
                 result["field"] = None
-                result["expected_status"] = 400
-                result["description"] = "Valid JSON body with wrong Content-Type (text/plain)"
+                result["expected_status"] = 415
+                result["description"] = f"Valid JSON body with wrong Content-Type (text/plain) (Accept-Post header present: {has_accept_post_header})"
                 results.append(result)
 
             for skipped in get_skipped_categories(schema):
@@ -213,6 +216,32 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["expected_status"] = case["expected_status"]
                 result["description"] = case["description"]
                 results.append(result)
+
+
+    if category_filter is None or constants.METHOD_NOT_ALLOWED in category_filter:
+        unique_paths = list(set(ep["path"] for ep in endpoints))
+        for path in unique_paths:
+            declared_methods = get_declared_methods_for_path(endpoints, path)
+            undeclared_methods = get_undeclared_method(declared_methods)
+
+            if undeclared_methods is None:
+                continue
+
+            path_param_schema = None
+            for ep in endpoints:
+                if ep["path"] == path and "{" in path:
+                    path_param_schema = get_path_param_schema(ep)
+                    break
+            test_path = fill_path_params(path, path_param_schema)
+
+            result = execute_test(base_url, undeclared_methods, test_path, data=None)
+            has_allow_header = check_allowed_header_present(result.get("response_headers",{}))
+            result["test_type"] = "invalid"
+            result["category"] = constants.METHOD_NOT_ALLOWED
+            result["field"] = None
+            result["expected_status"] = 405
+            result["description"] = f"Undeclared method '{undeclared_methods}' on path (Allow header present: {has_allow_header})"
+            results.append(result)
 
     return results, all_skipped
 

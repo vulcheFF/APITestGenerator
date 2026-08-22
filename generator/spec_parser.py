@@ -1,6 +1,7 @@
 import requests
 #print("STARTING--we in spec_parser--") #debug
 
+ALL_HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
 
 def fetch_openapi_spec(base_url: str) -> dict:
     response = requests.get(f"{base_url}/openapi.json")
@@ -75,6 +76,18 @@ def get_query_params_schema(endpoint: dict) -> list[dict]:
                 "schema": param.get("schema", {}),
             })
     return query_params
+
+
+def get_declared_methods_for_path(endpoints: list[dict], path: str) -> list[str]:
+    return [ep["method"] for ep in endpoints if ep["path"] == path]
+
+def get_undeclared_method(declared_methods: list[str]) -> str | None:
+    for method in ALL_HTTP_METHODS:
+        if method not in declared_methods:
+            return method
+    return None
+
+
 
 if __name__ == "__main__":
     spec = fetch_openapi_spec("http://127.0.0.1:8000")

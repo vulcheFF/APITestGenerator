@@ -19,6 +19,7 @@ def execute_test(base_url: str, method: str, path: str, data: dict = None, raw_b
             "data_sent": raw_body if raw_body is not None else data,
             "status_code": None,
             "response_body": None,
+            "response_headers": {},
             "error": str(e),
         }
 
@@ -29,6 +30,7 @@ def execute_test(base_url: str, method: str, path: str, data: dict = None, raw_b
         "data_sent": raw_body if raw_body is not None else data,
         "status_code": response.status_code,
         "response_body": safe_json(response),
+        "response_headers": dict(response.headers),
         "error": None,
     }
 
