@@ -65,6 +65,16 @@ def get_path_param_schema(endpoint: dict) -> dict | None:
     return None
 
 
+def get_query_params_schema(endpoint: dict) -> list[dict]:
+    query_params = []
+    for param in endpoint.get("parameters", []):
+        if param.get("in") == "query":
+            query_params.append({
+                "name": param.get("name"),
+                "required": param.get("required", False),
+                "schema": param.get("schema", {}),
+            })
+    return query_params
 
 if __name__ == "__main__":
     spec = fetch_openapi_spec("http://127.0.0.1:8000")
