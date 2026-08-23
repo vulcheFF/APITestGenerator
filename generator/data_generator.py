@@ -38,8 +38,6 @@ def generate_valid_value(field_schema: dict):
         else:
             minimum = 1
 
-
-
         maximum = field_schema.get("maximum")
         exclusive_max = field_schema.get("exclusiveMaximum")
         if exclusive_max is not None:
@@ -68,6 +66,13 @@ def generate_valid_value(field_schema: dict):
 
         return round(random.uniform(minimum, maximum),2)
 
+    if field_type == "array":
+        items_schema = field_schema.get("items", {})
+        min_items = field_schema.get("minItems", 1)
+        max_items = field_schema.get("maxItems", 3)
+        count = random.randint(min_items, max_items) if max_items >= min_items else min_items
+        return [generate_valid_value(items_schema) for _ in range(count)]
+
     return None
 
 
@@ -94,6 +99,10 @@ def _invalid_type_value(field_schema: dict):
     
     if field_type == "boolean":
         return "not_a_boolean"
+
+    if field_type == "array":
+        return "not_an_array"
+    
     
     return None 
 
@@ -242,7 +251,64 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
                 "description": f"Value does not match required pattern for field '{field_name}'",
                 "data": obj,
             })
-   
+        #invalid array item type - ok length, wrong type
+        if field_type == "array" and field_schema.get("items"):
+            obj = generate_valid_object(schema)
+            items_schema = field_schema["items"]
+            obj[field_name] = [_invalid_type_value(items_schema)]
+            test_cases.append({
+                "category": constants.INVALID_ARRAY_ITEM_TYPE,
+                "field": field_name,
+                "expected_status": 422,
+                "description": f"Array with ok length but wrong type element for field '{field_name}'",
+                "data": obj,
+            })
+            
+        #array boundary - <minItems or >maxItems
+        if field_type == "array":
+            
+            min_items = field_schema.get("minItems")
+            max_items = field_schema.get("maxItems")
+            items_schema = field_schema.get("items", {})
+
+            if min_items is not None and min_items > 0:
+                obj = generate_valid_object(schema)
+                items_schema = field_schema["items"]
+                obj[field_name] = [generate_valid_value(items_schema) for _ in range(min_items-1)]
+                test_cases.append({
+                    "category": constants.ARRAY_BOUNDARY,
+                    "field": field_name,
+                    "expected_status": 422,
+                    "description": f"Array below minItems for field '{field_name}'",
+                    "data": obj,
+                })
+
+            if max_items is not None:
+                obj = generate_valid_object(schema)
+                items_schema = field_schema["items"]
+                obj[field_name] = [generate_valid_value(items_schema) for _ in range(max_items + 1)]
+                test_cases.append({
+                    "category": constants.ARRAY_BOUNDARY,
+                    "field": field_name,
+                    "expected_status": 422,
+                    "description": f"Array above minItems for field '{field_name}'",
+                    "data": obj,
+                })
+
+            #duplicate_array_items - uniqueItems
+            if field_type == "array" and field_schema.get("uniqueItems"):
+                obj = generate_valid_object(schema)
+                items_schema = field_schema.get("items", {})
+                duplicate_value = generate_valid_value(items_schema)
+                obj[field_name] = [duplicate_value, duplicate_value]
+                test_cases.append({
+                    "category": constants.DUPLICATE_ARRAY_ITEMS,
+                    "field": field_name,
+                    "expected_status": 422,
+                    "description": f"Array with duplicate items for field '{field_name}'",
+                    "data": obj,
+                })
+
     # missing req
     for field_name in required_fields:
         obj = generate_valid_object(schema)
@@ -262,8 +328,8 @@ def get_skipped_categories(schema: dict) -> list[dict]:
     properties = schema.get("properties", {})
     skipped = []
 
-    has_min = any(p.get("type") in ("integer", "number") and p.get("minimum") is not None or p.get("exclusiveMinimum") is not None for p in properties.values())
-    has_max = any(p.get("type") in ("integer", "number") and p.get("maximum") is not None or p.get("exclusiveMaximum") is not None for p in properties.values())
+    has_min = any(p.get("type") in ("integer", "number") and (p.get("minimum") is not None or p.get("exclusiveMinimum") is not None) for p in properties.values())
+    has_max = any(p.get("type") in ("integer", "number") and (p.get("maximum") is not None or p.get("exclusiveMaximum") is not None) for p in properties.values())
 
     if not has_min and not has_max:
         skipped.append({
@@ -279,6 +345,13 @@ def get_skipped_categories(schema: dict) -> list[dict]:
             "reason": "No string field has 'minLength' or 'maxLength' in the schema",
         })
 
+    has_numeric_without_minimum = any(p.get("type") in ("integer", "number") and p.get("minimum") is None and  p.get("exclusiveMinimum") is None for p in properties.values())
+    if not has_numeric_without_minimum:
+        skipped.append({
+            "category": constants.NEGATIVE_VALUE,
+            "reason": "All numeric fields already have 'minnimum'/'eclusiveMinimum' decalred or no numeric fields exist in the schema",
+        })    
+    
     if not any("enum" in p for p in properties.values()):
         skipped.append({
             "category": constants.INVALID_ENUM,
@@ -296,6 +369,26 @@ def get_skipped_categories(schema: dict) -> list[dict]:
         skipped.append({
             "category": constants.INVALID_PATTERN,
             "reason": "No string field has 'pattern' in the schema"
+        })
+
+    has_array_items_type = any(p.get("type")=="array" and p.get("items", {}).get("type") is not None for p in properties.values())
+    if not has_array_items_type:
+        skipped.append({
+            "category": constants.INVALID_ARRAY_ITEM_TYPE,
+            "reason": "No array field has 'items' with decalred type in the schema"
+        })
+
+    has_array_bounds = any(p.get("type")=="array" and (p.get("minItems") is not None or p.get("maxItems") is not None) for p in properties.values())
+    if not has_array_bounds:
+        skipped.append({
+            "category": constants.ARRAY_BOUNDARY,
+            "reason": "No array field has 'minItems' or 'maxItems' in the schema"
+        })
+    has_unique_items = any(p.get("type") == "array" and p.get("uniqueItems") is True for p in properties.values())
+    if not has_unique_items:
+        skipped.append({
+            "category": constants.DUPLICATE_ARRAY_ITEMS,
+            "reason": "No array field has 'uniqueItems' in the schema"
         })
 
     return skipped

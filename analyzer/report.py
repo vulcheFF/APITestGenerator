@@ -19,7 +19,10 @@ SEVERITY_MAP = {
     constants.VALID_DATA: "HIGH",
     constants.MALFORMED_JSON: "HIGH",
     constants.WRONG_CONTENT_TYPE: "MEDIUM",
-    constants.METHOD_NOT_ALLOWED: "MEDIUM"
+    constants.METHOD_NOT_ALLOWED: "MEDIUM",
+    constants.INVALID_ARRAY_ITEM_TYPE: "HIGH",
+    constants.ARRAY_BOUNDARY: "HIGH",
+    constants.DUPLICATE_ARRAY_ITEMS: "HIGH",
 }
 
 
