@@ -24,6 +24,8 @@ DUPLICATE_ARRAY_ITEMS = "duplicate_array_items"
 #### Nested object ####
 NESTED_TYPE_MISMATCH = "nested_type_mismatch"
 INVALID_QUERY_PARAM_VALUE = "invalid_query_param_value"
+NESTED_MISSING_REQUIRED = "nested_missing_required"
+INVALID_QUERY_PARAM_ENUM = "invalid_query_param_enum"
 
 #### Query params ####
 MISSING_REQUIRED_QUERY_PARAM = "missing_required_query_param"
@@ -42,3 +44,5 @@ NONEXISTENT_ID = "nonexistent_id"
 INVALID_ID_FORMAT = "invalid_id_format"
 NEGATIVE_ID = "negative_id"
 
+####mass_assignment####
+MASS_ASSIGNMENT = "mass_assignment"

@@ -4,7 +4,7 @@ from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema
 from generator.spec_parser import get_declared_methods_for_path, get_undeclared_method
-from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value, _invalid_type_value
+from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value, _invalid_type_value, generate_mass_assignment_case, get_skipped_query_categories
 from generator.path_param_generator import generate_path_param_cases
 from generator.malformed_json_generator import generate_malformed_json_cases
 from executor.test_runner import execute_test
@@ -135,6 +135,17 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["description"] = case["description"]
                 results.append(result)
 
+            mass_assignment_case = generate_mass_assignment_case(schema)
+            if mass_assignment_case and (category_filter is None or constants.MASS_ASSIGNMENT in category_filter):
+                result = execute_test(base_url, endpoint["method"], filled_path, mass_assignment_case["data"])
+                result = attach_schema_conformance(result, spec, endpoint)
+                result["test_type"] = "invalid"
+                result["category"] = mass_assignment_case["category"]
+                result["field"] = mass_assignment_case["field"]
+                result["expected_status"] = mass_assignment_case["expected_status"]
+                result["description"] = mass_assignment_case["description"]
+                results.append(result)
+            
             if category_filter is  None or constants.MALFORMED_JSON in category_filter:
                 for case in generate_malformed_json_cases():
                     result = execute_test(base_url, endpoint["method"], filled_path, raw_body=case["body"])
@@ -226,6 +237,26 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         result["expected_status"] = 422
                         result["description"] = f"Invalid type for query param '{target_param["name"]}'"
                         results.append(result)
+
+                    for enum_param in required_params:
+                        param_schema = enum_param["schema"]
+                        enum_source = param_schema.get("items", {}) if param_schema.get("type") == "array" else param_schema
+                        if "enum" not in enum_source:
+                            continue
+
+                        invalid_query = {
+                            p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params if p["name"] != enum_param["name"]
+                        }
+                        invalid_query[enum_param["name"]] = "VALUE_NOT_IN_ENUM_LIST"
+                        test_path = endpoint["path"] + build_query_string(invalid_query)
+                        result = execute_test(base_url, endpoint["method"], test_path, data = None)
+                        result = attach_schema_conformance(result, spec, endpoint)
+                        result["test_type"] = "list_get"
+                        result["category"] = constants.INVALID_QUERY_PARAM_ENUM
+                        result["field"] = enum_param["name"]
+                        result["expected_status"] = 422
+                        result["description"] = f"Value outside enum list for query param '{enum_param["name"]}'"
+                        results.append(result)
                 else:
                     #no req params
                     result = execute_test(base_url, endpoint["method"], endpoint["path"], data=None)
@@ -236,7 +267,13 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["expected_status"] = 200
                     result["description"] = "Get list endpoint (no filters)"
                     results.append(result)
-
+                for skipped in get_skipped_query_categories(query_params):
+                    all_skipped.append({
+                        "path": endpoint["path"],
+                        "method": endpoint["method"],
+                        **skipped,
+                    })
+                    
         if endpoint["method"] in ("GET", "DELETE") and "{" in endpoint["path"]:
             param_schema = get_path_param_schema(endpoint)
             for case in generate_path_param_cases(param_schema):

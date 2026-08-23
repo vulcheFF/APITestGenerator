@@ -86,8 +86,19 @@ def generate_valid_value(field_schema: dict):
     return None
 
 
+def generate_mass_assignment_case(schema: dict) -> dict | None:
+    if schema.get("additionalProperties") is not False:
+        return None
 
-
+    obj = generate_valid_object(schema)
+    obj["injected_extra_field"] = "unexpected_value"
+    return {
+        "category": constants.MASS_ASSIGNMENT,
+        "field": "injected_extra_field",
+        "expected_status": 422,
+        "description": "Extra undeclared field injected (additionalProperties: false declared)",
+        "data": obj,
+    }
 
 def _invalid_type_value(field_schema: dict):
     field_type = field_schema.get("type")
@@ -316,6 +327,8 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
 
         if field_type == "object" and field_schema.get("properties"):
             nested_properties = field_schema["properties"]
+            nested_required = field_schema.get("required", [])
+
             for nested_field_name, nested_field_schema in nested_properties.items():
                 obj = generate_valid_object(schema)
                 nested_obj = generate_valid_object(field_schema)
@@ -328,7 +341,21 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
                     "description": f"Invalid type for nested field '{field_name}.{nested_field_name}'",
                     "data": obj,
                 })
-                break #only first nested field            
+                break #only first nested field   
+
+            for nested_required_field in nested_required:
+                obj = generate_valid_object(schema)
+                nested_obj = generate_valid_object(field_schema)
+                del nested_obj[nested_required_field]
+                obj[field_name] = nested_obj
+                test_cases.append({
+                    "category": constants.NESTED_MISSING_REQUIRED,
+                    "field": f"{field_name}.{nested_required_field}",
+                    "expected_status": 422,
+                    "description": f"Missing required nested field '{field_name}.{nested_required_field}'",
+                    "data": obj,
+                })
+                break
 
     # missing req
     for field_name in required_fields:
@@ -419,8 +446,54 @@ def get_skipped_categories(schema: dict) -> list[dict]:
             "reason": "No nested object field with 'properties' in the schema"
         }) 
 
+    has_nested_required = any(p.get("type")=="object" and p.get("properties") and p.get("required") for p in properties.values())
+    if not has_nested_required:
+        skipped.append({
+            "category": constants.NESTED_MISSING_REQUIRED,
+            "reason": "No nested object field has its own 'required' properties declared"
+        })
+
+    if schema.get("additionalProperties") is not False:
+        skipped.append({
+            "category": constants.MASS_ASSIGNMENT,
+            "reason": "Schema does not declare 'additionalProperties': false"
+        })
+
     return skipped
 
+def get_skipped_query_categories(query_params: list[dict]) -> list[dict]:
+    skipped = []
+    required_params = [p for p in query_params if p["required"]]
+
+    if not required_params:
+        skipped.append({
+            "category": constants.MISSING_REQUIRED_QUERY_PARAM,
+            "reason": "No required query paramters declared"
+        })
+        skipped.append({
+            "category": constants.INVALID_QUERY_PARAM_VALUE,
+            "reason": "No required query paramters declared"
+        })
+        skipped.append({
+            "category": constants.INVALID_QUERY_PARAM_ENUM,
+            "reason": "No required query paramters declared"
+        })
+        return skipped
+
+    has_non_string_type = any((p["schema"].get("items",{}) if p["schema"].get("type") == "array" else p["schema"].get("type")) not in ("string",None) for p in required_params)
+    if not has_non_string_type:
+        skipped.append({
+            "category": constants.INVALID_QUERY_PARAM_VALUE,
+            "reason": "All required quiry param are string-type - no missmatch possible"
+        })
+
+    has_query_enum = any("enum" in (p["schema"].get("items",{}) if p["schema"].get("type") == "array" else p["schema"]) for p in required_params)
+    if not has_query_enum:
+        skipped.append({
+            "category": constants.INVALID_QUERY_PARAM_ENUM,
+            "reason": "No required query param(or its array items) has 'enum' declared"
+        })
+    return skipped
                 
 if __name__ == "__main__":
     # print(generate_valid_value({"type":"string"}))
