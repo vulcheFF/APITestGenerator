@@ -279,8 +279,7 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
             items_schema = field_schema.get("items", {})
 
             if min_items is not None and min_items > 0:
-                obj = generate_valid_object(schema)
-                items_schema = field_schema["items"]
+                obj = generate_valid_object(schema)                
                 obj[field_name] = [generate_valid_value(items_schema) for _ in range(min_items-1)]
                 test_cases.append({
                     "category": constants.ARRAY_BOUNDARY,
@@ -291,14 +290,13 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
                 })
 
             if max_items is not None:
-                obj = generate_valid_object(schema)
-                items_schema = field_schema["items"]
+                obj = generate_valid_object(schema)                
                 obj[field_name] = [generate_valid_value(items_schema) for _ in range(max_items + 1)]
                 test_cases.append({
                     "category": constants.ARRAY_BOUNDARY,
                     "field": field_name,
                     "expected_status": 422,
-                    "description": f"Array above minItems for field '{field_name}'",
+                    "description": f"Array above maxItems for field '{field_name}'",
                     "data": obj,
                 })
 
@@ -372,7 +370,7 @@ def get_skipped_categories(schema: dict) -> list[dict]:
     if not has_numeric_without_minimum:
         skipped.append({
             "category": constants.NEGATIVE_VALUE,
-            "reason": "All numeric fields already have 'minnimum'/'eclusiveMinimum' decalred or no numeric fields exist in the schema",
+            "reason": "All numeric fields already have 'minnimum'/'exclusiveMinimum' decalred or no numeric fields exist in the schema",
         })    
     
     if not any("enum" in p for p in properties.values()):

@@ -1,7 +1,10 @@
-
+def check_header_present(headers: dict, header_name: str) -> bool:
+    return header_name in headers or header_name.lower() in headers
 
 def check_allowed_header_present(response_headers: dict) -> bool:
-    return "Allow" in response_headers or "allow" in response_headers
+    return check_header_present(response_headers, "Allow")
 
 def check_accept_post_header_present(response_headers: dict) -> bool:
-    return "Accept-Post" in response_headers or "accept-post" in response_headers
+    return check_header_present(response_headers, "Accept-Post")
+
+

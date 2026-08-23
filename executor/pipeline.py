@@ -4,7 +4,7 @@ from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema
 from generator.spec_parser import get_declared_methods_for_path, get_undeclared_method
-from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value
+from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value, _invalid_type_value
 from generator.path_param_generator import generate_path_param_cases
 from generator.malformed_json_generator import generate_malformed_json_cases
 from executor.test_runner import execute_test
@@ -24,6 +24,7 @@ def get_default_path_value(param_schema: dict | None) -> str:
         return "1.5"
     if param_type == "boolean":
         return "1"
+    return "1"
 
 def fill_path_params(path: str, param_schema: dict | None = None) -> str:
     value = get_default_path_value(param_schema)
@@ -43,7 +44,14 @@ def attach_schema_conformance(result: dict, spec: dict, endpoint: dict) -> dict:
 def build_query_string(params: dict) -> str:
     if not params:
         return ""
-    parts = [f"{key}={value}" for key, value in params.items()]
+    parts = [] #[f"{key}={value}" for key, value in params.items()]
+    for key, value in params.items():
+        if isinstance(value, list):
+            for item in value:
+                parts.append(f"{key}={item}")
+        else:
+           parts.append(f"{key}={value}") 
+
     return "?" + "&".join(parts)
 
 def find_id_like_field(schema: dict, path_param_name: str = None) -> str | None:
@@ -183,13 +191,40 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                             p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params if p["name"] != missing_param["name"]
                         }
                         test_path = endpoint["path"] + build_query_string(partial_query)
-                        result = execute_test(base_url, endpoint["method"], endpoint["path"], data = None)
+                        result = execute_test(base_url, endpoint["method"], test_path, data = None)
                         result = attach_schema_conformance(result, spec, endpoint)
                         result["test_type"] = "list_get"
                         result["category"] = constants.MISSING_REQUIRED_QUERY_PARAM
                         result["field"] = missing_param["name"]
                         result["expected_status"] = 422
                         result["description"] = f"Missing required query param '{missing_param["name"]}'"
+                        results.append(result)
+
+                    #Invalid value for each required parameter individually
+                    for target_param in required_params:
+                        target_schema = target_param["schema"]
+                        effective_type = (target_schema.get("items", {}).get("type") if target_schema.get("type") == "array" else target_schema.get("type"))
+
+                        if effective_type in ("string", None):
+                            continue
+
+                        if target_schema.get("type") == "array":
+                            invalid_value = _invalid_type_value(target_schema["items"])
+                        else:
+                            invalid_value = _invalid_type_value(target_schema)
+
+                        invalid_query = {
+                            p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params if p["name"] != target_param["name"]
+                        }
+                        invalid_query[target_param["name"]] = invalid_value
+                        test_path = endpoint["path"] + build_query_string(invalid_query)
+                        result = execute_test(base_url, endpoint["method"], test_path, data = None)
+                        result = attach_schema_conformance(result, spec, endpoint)
+                        result["test_type"] = "list_get"
+                        result["category"] = constants.INVALID_QUERY_PARAM_VALUE
+                        result["field"] = target_param["name"]
+                        result["expected_status"] = 422
+                        result["description"] = f"Invalid type for query param '{target_param["name"]}'"
                         results.append(result)
                 else:
                     #no req params

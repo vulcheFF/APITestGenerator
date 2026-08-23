@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi import HTTPException
 from demo_api.models import Book
 
@@ -36,13 +36,20 @@ books_db: list[Book] = [
 def get_books() -> list[Book]:
     return books_db
 
+
+
+@app.get("/books/search")
+def search_books(tags: list[str] = Query(...)) -> list[Book]:
+    return [book for book in books_db if book.genre in tags]
+
 @app.get("/books/{book_id}")
 def get_books(book_id: int) -> Book | dict:
     for book in books_db:
         if book.id == book.id:
             return book
-        # 404 трябва, а не 200
+        # 404 , not 200
     return {}
+
 
 @app.post("/books")
 def create_book(book: Book) -> Book:

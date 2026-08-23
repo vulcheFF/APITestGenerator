@@ -24,6 +24,7 @@ SEVERITY_MAP = {
     constants.ARRAY_BOUNDARY: "HIGH",
     constants.DUPLICATE_ARRAY_ITEMS: "HIGH",
     constants.NESTED_TYPE_MISMATCH: "HIGH",
+    constants.INVALID_QUERY_PARAM_VALUE: "MEDIUM",
 }
 
 
