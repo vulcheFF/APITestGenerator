@@ -1,6 +1,10 @@
 from pydantic import BaseModel, Field
 from datetime import date
 
+class AuthorInfo(BaseModel):
+    name: str
+    nationality: str
+
 class Book(BaseModel):
     id: int
     title: str
@@ -10,3 +14,4 @@ class Book(BaseModel):
     quantity: int = Field(ge=0, description="Quantity can't be negative")
     published_date: date
     genre: str
+    author_info: AuthorInfo

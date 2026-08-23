@@ -14,7 +14,8 @@ books_db: list[Book] = [
         price = 23.99,
         quantity = 10,
         published_date= "1949-06-08",
-        genre="Dystopian"
+        genre="Dystopian",
+        author_info={"name": "George Orwell", "nationality": "British"}
 
     ),
     Book(
@@ -25,7 +26,8 @@ books_db: list[Book] = [
         price = 13.99,
         quantity = 5,
         published_date= "1932-01-01",
-        genre="Dystopian"
+        genre="Dystopian",
+        author_info={"name": "Aldous Huxley", "nationality": "British"}
         
     )
 ]

@@ -32,6 +32,35 @@ def resolve_schema_ref(spec: dict, ref: str) -> dict:
         schema = schema[part]
     return schema
 
+def resolve_all_refs(spec: dict, schema: dict, _seen: set = None, _depth: int = 0, _max_depth: int = 15) -> dict:
+    if _depth > _max_depth:
+        return {}
+
+    if _seen is None:
+        _seen = set()
+
+    if not isinstance(schema, dict):
+        return schema
+
+    if "$ref" in schema:
+        ref = schema["$ref"]
+        if ref in _seen:
+            return {}
+        _seen = _seen | {ref}
+        resolved = resolve_schema_ref(spec,ref)
+        return resolve_all_refs(spec, resolved, _seen, _depth + 1, _max_depth)
+
+    result = dict(schema)
+    if "properties" in result:
+        result["properties"] = {
+            k: resolve_all_refs(spec, v, _seen, _depth +1, _max_depth) for k, v in result["properties"].items()
+        }
+
+    if "items" in result:
+        result["items"] = resolve_all_refs(spec, result["items"], _seen, _depth + 1, _max_depth)
+
+    return result
+
 
 def get_request_body_schema(spec: dict, endpoint: dict) -> dict | None:
     request_body = endpoint.get("request_body", {})
@@ -43,8 +72,11 @@ def get_request_body_schema(spec: dict, endpoint: dict) -> dict | None:
     schema_ref = json_content.get("schema", {})
 
     if "$ref" in schema_ref:
-        return resolve_schema_ref(spec, schema_ref["$ref"])
-    return schema_ref
+        schema =  resolve_schema_ref(spec, schema_ref["$ref"])
+    else:
+        schema = schema_ref
+
+    return resolve_all_refs(spec, schema)
 
 def get_response_schema(spec: dict, endpoint: dict, status_code: str) -> dict | None:
     responses = endpoint.get("responses", {})

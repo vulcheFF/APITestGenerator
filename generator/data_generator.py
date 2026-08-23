@@ -3,6 +3,13 @@ import random
 import exrex
 from generator import constants
 
+def generate_valid_object(schema: dict) -> dict:
+    properties = schema.get("properties", {})
+    return {
+        field_name: generate_valid_value(field_schema)
+        for field_name, field_schema in properties.items()
+    }
+
 
 def generate_valid_value(field_schema: dict):
     field_type = field_schema.get("type")
@@ -73,16 +80,13 @@ def generate_valid_value(field_schema: dict):
         count = random.randint(min_items, max_items) if max_items >= min_items else min_items
         return [generate_valid_value(items_schema) for _ in range(count)]
 
+    if field_type == "object":
+        return generate_valid_object(field_schema)
+
     return None
 
 
 
-def generate_valid_object(schema: dict) -> dict:
-    properties = schema.get("properties", {})
-    return {
-        field_name: generate_valid_value(field_schema)
-        for field_name, field_schema in properties.items()
-    }
 
 
 def _invalid_type_value(field_schema: dict):
@@ -102,6 +106,9 @@ def _invalid_type_value(field_schema: dict):
 
     if field_type == "array":
         return "not_an_array"
+
+    if field_type == "object":
+        return "not_an_object"
     
     
     return None 
@@ -309,6 +316,22 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
                     "data": obj,
                 })
 
+        if field_type == "object" and field_schema.get("properties"):
+            nested_properties = field_schema["properties"]
+            for nested_field_name, nested_field_schema in nested_properties.items():
+                obj = generate_valid_object(schema)
+                nested_obj = generate_valid_object(field_schema)
+                nested_obj[nested_field_name] = _invalid_type_value(nested_field_schema)
+                obj[field_name] = nested_obj
+                test_cases.append({
+                    "category": constants.NESTED_TYPE_MISMATCH,
+                    "field": f"{field_name}.{nested_field_name}",
+                    "expected_status": 422,
+                    "description": f"Invalid type for nested field '{field_name}.{nested_field_name}'",
+                    "data": obj,
+                })
+                break #only first nested field            
+
     # missing req
     for field_name in required_fields:
         obj = generate_valid_object(schema)
@@ -390,6 +413,13 @@ def get_skipped_categories(schema: dict) -> list[dict]:
             "category": constants.DUPLICATE_ARRAY_ITEMS,
             "reason": "No array field has 'uniqueItems' in the schema"
         })
+
+    has_nested_object = any(p.get("type") == "object" and p.get("properties") for p in properties.values())
+    if not has_nested_object:
+        skipped.append({
+            "category": constants.NESTED_TYPE_MISMATCH,
+            "reason": "No nested object field with 'properties' in the schema"
+        }) 
 
     return skipped
 
