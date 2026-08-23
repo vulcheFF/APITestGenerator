@@ -324,6 +324,18 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
                     "description": f"Array with duplicate items for field '{field_name}'",
                     "data": obj,
                 })
+            if field_type == "array" and field_schema.get("minItems") is None:
+                obj = generate_valid_object(schema)
+                items_schema = field_schema.get("items", {})
+                duplicate_value = generate_valid_value(items_schema)
+                obj[field_name] = [duplicate_value, duplicate_value]
+                test_cases.append({
+                    "category": constants.EMPTY_ARRAY,
+                    "field": field_name,
+                    "expected_status": 422,
+                    "description": f"Empty array for field '{field_name}' (no minItems declared)",
+                    "data": obj,
+                })
 
         if field_type == "object" and field_schema.get("properties"):
             nested_properties = field_schema["properties"]
@@ -437,6 +449,12 @@ def get_skipped_categories(schema: dict) -> list[dict]:
         skipped.append({
             "category": constants.DUPLICATE_ARRAY_ITEMS,
             "reason": "No array field has 'uniqueItems' in the schema"
+        })
+    has_array_without_minitems = any(p.get("type") == "array" and p.get("minItems") is None for p in properties.values())
+    if not has_array_without_minitems:
+        skipped.append({
+            "category": constants.EMPTY_ARRAY,
+            "reason": "All array fields already have 'minItems' declared, or no array fields exist"
         })
 
     has_nested_object = any(p.get("type") == "object" and p.get("properties") for p in properties.values())

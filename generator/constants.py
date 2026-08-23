@@ -20,6 +20,7 @@ INVALID_PATTERN = "invalid_pattern"
 INVALID_ARRAY_ITEM_TYPE = "invalid_array_item_type"
 ARRAY_BOUNDARY = "array_boundary"
 DUPLICATE_ARRAY_ITEMS = "duplicate_array_items"
+EMPTY_ARRAY = "empty_array"
 
 #### Nested object ####
 NESTED_TYPE_MISMATCH = "nested_type_mismatch"
