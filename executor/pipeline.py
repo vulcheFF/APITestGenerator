@@ -323,6 +323,14 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 if result:
                     results.append(result)
 
+    if category_filter is None or constants.PUT_IDEMPOTENCY in category_filter:
+        for endpoint in endpoints:
+            if endpoint["method"] == "PUT" and "{" in endpoint["path"]:
+                result = test_put_idempotency(base_url, spec, endpoints, endpoint)
+                if result:
+                    results.append(result)
+
+
     return results, all_skipped
 
 
@@ -356,18 +364,12 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
         }
 
     create_id = create_result["response_body"].get("id", create_data.get("id"))
-    #import random
-    
-    print("DEBUG: create_data id:", create_data.get("id"))
-    print("DEBUG: response body id:", create_result["response_body"].get("id"))
-    print("DEBUG: using create_id:", create_id)
     test_path = fill_path_params_with_value(delete_endpoint["path"], str(create_id))
-    print("DEBUG: test_path:", test_path)
     first_delete = execute_test(base_url, "DELETE", test_path, data=None)
-    print("DEBUG: first_delete status:", first_delete["status_code"], "body:", first_delete.get("response_body"))
+    #print("DEBUG: first_delete status:", first_delete["status_code"], "body:", first_delete.get("response_body"))
     time.sleep(0.1)
     second_delete = execute_test(base_url, "DELETE", test_path, data=None)
-    print("DEBUG: second_delete status:", second_delete["status_code"], "body:", second_delete.get("response_body"))
+    #print("DEBUG: second_delete status:", second_delete["status_code"], "body:", second_delete.get("response_body"))
 
     second_delete["category"] = constants.DELETE_IDEMPOTENCY
     second_delete["field"] = None
@@ -377,6 +379,70 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
 
     return second_delete
 
+
+def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_endpoint: dict) -> dict | None:
+    schema = get_request_body_schema(spec,put_endpoint)
+    if not schema:
+        return None
+
+    create_endpoint = find_matching_create_endpoint(endpoints, put_endpoint["path"])
+    if create_endpoint is None:
+        return None
+
+    create_schema = get_request_body_schema(spec, create_endpoint)
+    if not create_schema:
+        return None
+
+    #own data with unique id
+    create_data = generate_valid_object(create_schema)
+    id_field = find_id_like_field(create_schema)
+
+    if id_field:
+        create_data[id_field] = random.randint(10_000_000,99_999_999)
+
+    create_result = execute_test(base_url, "POST", create_endpoint["path"], create_data)
+    if create_result["status_code"] not in (200,201):
+        return {
+            "category": constants.PUT_IDEMPOTENCY,
+            "field": None,
+            "expected_status": None,
+            "description": "Setup (POST) failed, cannot test PUT idempotency",
+            "status_code": create_result["status_code"],
+            "test_type": "sequence",
+            "method": "PUT",
+            "path": put_endpoint["path"],
+            "response_body": create_result.get("response_body"),
+            "error": "Setup failed",
+        }  
+
+    created_id = create_result["response_body"].get(id_field, create_data.get(id_field)) if id_field else None
+    path_param_schema = get_path_param_schema(put_endpoint)
+    test_path = fill_path_params_with_value(put_endpoint["path"], str(created_id)) if created_id else fill_path_params(put_endpoint["path"], path_param_schema)
+
+    #generate valid update data
+    update_data = generate_valid_object(schema)
+    put_id_field = find_id_like_field(schema)
+
+    if put_id_field and created_id is not None:
+        update_data[put_id_field] = int(created_id) if isinstance(created_id, int) else created_id
+
+    first_put = execute_test(base_url, "PUT", test_path, update_data)
+    second_put = execute_test(base_url, "PUT", test_path, update_data)
+
+    #both PUT should have same result
+    is_consistent = first_put["status_code"] == second_put["status_code"]
+
+    second_put["category"] = constants.PUT_IDEMPOTENCY
+    second_put["field"] = None
+    second_put["expected_status"] = first_put["status_code"]
+    second_put["test_type"] = "sequence"
+    second_put["description"] =  (
+        f"Second PUT with identical data (id={created_id}): first status "
+        f"{first_put['status_code']}, second status {second_put['status_code']} "
+        f"({'consistent' if is_consistent else 'INCONSISTENT'})"
+    )
+
+    return second_put
 if __name__ == "__main__":
     init_db()
 

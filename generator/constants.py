@@ -50,3 +50,4 @@ MASS_ASSIGNMENT = "mass_assignment"
 
 #### State-consistency ####
 DELETE_IDEMPOTENCY = "delete_idempotency"
+PUT_IDEMPOTENCY = "put_idempotency"

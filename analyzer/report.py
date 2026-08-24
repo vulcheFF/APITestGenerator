@@ -29,6 +29,7 @@ SEVERITY_MAP = {
     constants.INVALID_QUERY_PARAM_ENUM: "MEDIUM",
     constants.EMPTY_ARRAY: "INFO",
     constants.DELETE_IDEMPOTENCY: "HIGH",
+    constants.PUT_IDEMPOTENCY: "HIGH",
 }
 
 
