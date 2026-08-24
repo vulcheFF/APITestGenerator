@@ -119,7 +119,7 @@ def analyze_results(results: list[dict])-> dict:
                     "path": r["path"],
                     "category": constants.RESPONSE_SCHEMA_MISMATCH,
                     "field": r.get("field"),
-                    "description": f"{r['description']} — response body несъответства на декларираната схема: {'; '.join(conformance_errors)}",
+                    "description": f"{r['description']} — response body does not comply with the declared schema: {'; '.join(conformance_errors)}",
                     "expected_status": expected,
                     "status_code": actual,
                     "severity": determine_severity(constants.RESPONSE_SCHEMA_MISMATCH),
