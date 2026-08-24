@@ -45,5 +45,8 @@ NONEXISTENT_ID = "nonexistent_id"
 INVALID_ID_FORMAT = "invalid_id_format"
 NEGATIVE_ID = "negative_id"
 
-####mass_assignment####
+#### Mass Assignment ####
 MASS_ASSIGNMENT = "mass_assignment"
+
+#### State-consistency ####
+DELETE_IDEMPOTENCY = "delete_idempotency"

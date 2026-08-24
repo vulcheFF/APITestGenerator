@@ -45,7 +45,7 @@ def search_books(tags: list[str] = Query(...)) -> list[Book]:
 @app.get("/books/{book_id}")
 def get_books(book_id: int) -> Book | dict:
     for book in books_db:
-        if book.id == book.id:
+        if book.id == book_id:
             return book
         # 404 , not 200
     return {}
@@ -60,7 +60,7 @@ def create_book(book: Book) -> Book:
 @app.put("/books/{book_id}")
 def update_book(book_id: int, updated_book: Book)  -> Book:
     for index, book in enumerate(books_db):
-        if book.id == book.id:
+        if book.id == book_id:
             #няма проверки пак
             books_db[index] = updated_book
             return updated_book
@@ -69,7 +69,7 @@ def update_book(book_id: int, updated_book: Book)  -> Book:
 @app.delete("/books/{book_id}")
 def delete_book(book_id: int) -> dict:
     for index, book in enumerate(books_db):
-        if book.id == book.id:
+        if book.id == book_id:
             del books_db[index]
             return {"msg":"Book deleted!"}
     raise HTTPException(status_code=404, detail = "Book not found!")     

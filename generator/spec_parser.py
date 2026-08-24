@@ -1,4 +1,5 @@
 import requests
+import re
 #print("STARTING--we in spec_parser--") #debug
 
 ALL_HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
@@ -119,6 +120,12 @@ def get_undeclared_method(declared_methods: list[str]) -> str | None:
             return method
     return None
 
+def find_matching_create_endpoint(endpoints: list[dict], delete_path: str) -> dict | None:
+    base_path = re.sub(r"/\{[^}]+\}$","",delete_path)
+    for ep in endpoints:
+        if ep["method"] == "POST" and ep["path"] == base_path:
+            return ep
+    return None
 
 
 if __name__ == "__main__":

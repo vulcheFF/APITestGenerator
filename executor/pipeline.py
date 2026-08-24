@@ -1,9 +1,10 @@
 import re
 import random
+import time
 from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema
-from generator.spec_parser import get_declared_methods_for_path, get_undeclared_method
+from generator.spec_parser import get_declared_methods_for_path, get_undeclared_method, find_matching_create_endpoint
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value, _invalid_type_value, generate_mass_assignment_case, get_skipped_query_categories
 from generator.path_param_generator import generate_path_param_cases
 from generator.malformed_json_generator import generate_malformed_json_cases
@@ -315,7 +316,66 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
             result["description"] = f"Undeclared method '{undeclared_methods}' on path (Allow header present: {has_allow_header})"
             results.append(result)
 
+    if category_filter is None or constants.DELETE_IDEMPOTENCY in category_filter:
+        for endpoint in endpoints:
+            if endpoint["method"] == "DELETE" and "{" in endpoint["path"]:
+                result = test_delete_idempotency(base_url, spec, endpoints, endpoint)
+                if result:
+                    results.append(result)
+
     return results, all_skipped
+
+
+def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], delete_endpoint: dict) -> dict | None:
+    create_endpoint = find_matching_create_endpoint(endpoints, delete_endpoint["path"])
+    if create_endpoint is None:
+        return None
+
+    schema = get_request_body_schema(spec, create_endpoint)
+    if not schema: 
+        return None
+
+    create_data = generate_valid_object(schema)
+    import random
+    id_field = find_id_like_field(schema)
+    if id_field:
+        create_data[id_field] = random.randint(10_000_000,99_999_999)
+    create_result = execute_test(base_url, "POST", create_endpoint["path"], create_data)
+    if create_result["status_code"] not in (200,201):
+        return {
+            "category": constants.DELETE_IDEMPOTENCY,
+            "field": None,
+            "expected_status": None,
+            "description": "Setup (POST) failed, cannot test DELETE idempotency",
+            "status_code": create_result["status_code"],
+            "test_type": "sequence",
+            "method": "DELETE",
+            "path": delete_endpoint["path"],
+            "response_body": create_result.get("response_body"),
+            "error": "Setup failed",
+        }
+
+    create_id = create_result["response_body"].get("id", create_data.get("id"))
+    #import random
+    
+    print("DEBUG: create_data id:", create_data.get("id"))
+    print("DEBUG: response body id:", create_result["response_body"].get("id"))
+    print("DEBUG: using create_id:", create_id)
+    test_path = fill_path_params_with_value(delete_endpoint["path"], str(create_id))
+    print("DEBUG: test_path:", test_path)
+    first_delete = execute_test(base_url, "DELETE", test_path, data=None)
+    print("DEBUG: first_delete status:", first_delete["status_code"], "body:", first_delete.get("response_body"))
+    time.sleep(0.1)
+    second_delete = execute_test(base_url, "DELETE", test_path, data=None)
+    print("DEBUG: second_delete status:", second_delete["status_code"], "body:", second_delete.get("response_body"))
+
+    second_delete["category"] = constants.DELETE_IDEMPOTENCY
+    second_delete["field"] = None
+    second_delete["expected_status"] = 404
+    second_delete["test_type"] = "sequence"
+    second_delete["description"] = (        f"Second DELETE on same result (id={create_id}) after successful first DELETE (first delete status:{first_delete['status_code']})")
+
+    return second_delete
 
 if __name__ == "__main__":
     init_db()
