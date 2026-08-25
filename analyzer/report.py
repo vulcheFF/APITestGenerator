@@ -164,7 +164,7 @@ def print_report(analysis: dict, show_passed: bool = True):
             issues_by_category.setdefault(issue["category"], []).append(issue)
 
         for category, items in issues_by_category.items():
-            print(f"\n ==={category} ({len(items)}) ===")
+            print(f"\n === {category} ({len(items)}) ===")
             for issue in items:
 
                 print(f"[{colorize_status(issue['severity'])}] {issue['method']} {issue['path']}") # {issue['category']}
