@@ -135,6 +135,8 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["expected_status"] = case["expected_status"]
                 result["description"] = case["description"]
                 results.append(result)
+                if endpoint["method"] == "POST":
+                    cleanup_if_unexpectedly_succeeded(base_url, endpoints, endpoint, result, schema )
 
             mass_assignment_case = generate_mass_assignment_case(schema)
             if mass_assignment_case and (category_filter is None or constants.MASS_ASSIGNMENT in category_filter):
@@ -277,17 +279,23 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     
         if endpoint["method"] in ("GET", "DELETE") and "{" in endpoint["path"]:
             param_schema = get_path_param_schema(endpoint)
+            base_path = re.sub(r"/\{[^}]+\}$", "", endpoint["path"])
+            path_param_match = re.search(r"\{([^}]+)\}", endpoint["path"])
+            path_param_name = path_param_match.group(1) if path_param_match else None
+            real_id = get_real_id_from_list(base_url, base_path, path_param_name) if path_param_name else None
+
             for case in generate_path_param_cases(param_schema):
                 if category_filter is not None and case["category"] not in category_filter:
                     continue
-                test_path = fill_path_params_with_value(endpoint["path"], case["value"])
+                value = real_id if (case["category"] == constants.VALID_ID and real_id is not None) else case["value"]
+                test_path = fill_path_params_with_value(endpoint["path"], value)
                 result = execute_test(base_url, endpoint["method"], test_path, data=None)
                 result = attach_schema_conformance(result, spec, endpoint)
                 result["test_type"] = "path_param"
                 result["category"] = case["category"]
                 result["field"] = None
                 result["expected_status"] = case["expected_status"]
-                result["description"] = case["description"]
+                result["description"] = case["description"] if value == case["value"] else f"{case['description']} (reall id = {value})"
                 results.append(result)
 
 
@@ -380,6 +388,7 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
     return second_delete
 
 
+
 def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_endpoint: dict) -> dict | None:
     schema = get_request_body_schema(spec,put_endpoint)
     if not schema:
@@ -443,6 +452,59 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
     )
 
     return second_put
+
+
+def get_real_id_from_list(base_url: str, list_path: str, path_param_name: str) -> str | None:
+    result = execute_test(base_url, "GET", list_path, data=None)
+    if result["status_code"] !=200:
+        return None
+
+    items = result.get("response_body")
+    if not isinstance(items, list) or len(items) == 0:
+        return None
+
+    first_item = items[0]
+    if not isinstance(first_item, dict):
+        return None
+
+    if path_param_name in first_item:
+        return str(first_item[path_param_name])
+
+    for key,value in first_item.items():
+        if _is_id_like_name(key):
+            return str(value)
+
+    return None
+
+
+def cleanup_if_unexpectedly_succeeded(base_url: str, endpoints: list[dict], endpoint: dict, result: dict, schema: dict):
+    if result.get("status_code") not in (200,201):
+        return
+
+    expected = result.get("expected_status")
+    if expected is None or expected <400:
+        return
+
+    id_field = find_id_like_field(schema)
+    if id_field is None:
+        return
+
+    response_body = result.get("response_body")
+
+    if not isinstance(response_body, dict) or id_field not in response_body:
+        return
+    created_id = response_body[id_field]
+
+    base_path = endpoint["path"]
+    delete_endpoint = next( (ep for ep in endpoints if ep["method"] == "DELETE" and re.sub(r"/\{[^}]+\}$","", ep["path"]) == base_path) , None)
+    if delete_endpoint is None:
+        return
+    cleanup_path = fill_path_params_with_value(delete_endpoint["path"], str(created_id))
+    try:
+        execute_test(base_url, "DELETE", cleanup_path, data=None)
+    except:
+        pass
+
 if __name__ == "__main__":
     init_db()
 
