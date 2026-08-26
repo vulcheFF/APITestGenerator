@@ -55,3 +55,4 @@ PUT_IDEMPOTENCY = "put_idempotency"
 #### AI-assisted ####
 AI_IMPLICIT_CONSTRAINT_VIOLATION = "ai_implicit_constraint_violation"
 AI_IMPLICIT_CONSTRAINT_VALID = "ai_implicit_constraint_valid"
+AI_CROSS_FIELD_VIOLATION = "ai_cross_field_violation"

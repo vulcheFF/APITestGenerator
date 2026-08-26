@@ -15,3 +15,7 @@ class Book(BaseModel):
     published_date: date
     genre: str
     author_info: AuthorInfo
+    discount_price: float = Field(
+    gt=0,
+    description="Discounted price. Must always be lower than the regular price."
+)

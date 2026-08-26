@@ -2,7 +2,7 @@ import string
 import random
 import exrex
 from generator import constants
-from ai.constraint_mining import mine_implicit_constraint
+from ai.constraint_mining import mine_implicit_constraint, mine_cross_field_constraint
 
 def generate_valid_object(schema: dict) -> dict:
     properties = schema.get("properties", {})
@@ -327,9 +327,7 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
                 })
             if field_type == "array" and field_schema.get("minItems") is None:
                 obj = generate_valid_object(schema)
-                items_schema = field_schema.get("items", {})
-                duplicate_value = generate_valid_value(items_schema)
-                obj[field_name] = [duplicate_value, duplicate_value]
+                obj[field_name] = []
                 test_cases.append({
                     "category": constants.EMPTY_ARRAY,
                     "field": field_name,
@@ -438,6 +436,28 @@ def generate_ai_constraint_cases(schema: dict, put_id_sync: dict | None = None) 
 
     return test_cases
 
+
+def generate_cross_field_case(schema: dict) -> dict | None:
+    ai_result = mine_cross_field_constraint(schema)
+    if ai_result is None:
+        return None
+
+    obj = generate_valid_object(schema)
+    obj[ai_result["field_a"]] = ai_result["invalid_value_a"]
+    obj[ai_result["field_b"]] = ai_result["invalid_value_b"]
+
+    return {
+        "category": constants.AI_CROSS_FIELD_VIOLATION,
+        "field": f"{ai_result['field_a']}+{ai_result['field_b']}",
+        "expected_status": 422,
+        "description": (
+            f"AI-detected cross-field constraint: {ai_result['constraint_description']} "
+            f"(heuristic, not formally declared in schema)"
+        ),
+        "data": obj,
+
+    }
+
 def get_skipped_categories(schema: dict) -> list[dict]:
     properties = schema.get("properties", {})
     skipped = []
@@ -532,6 +552,9 @@ def get_skipped_categories(schema: dict) -> list[dict]:
         })
 
     return skipped
+
+
+
 
 def get_skipped_query_categories(query_params: list[dict]) -> list[dict]:
     skipped = []
