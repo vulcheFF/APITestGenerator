@@ -14,6 +14,7 @@ from analyzer.header_checks import check_allowed_header_present, check_accept_po
 from storage.repository import save_run
 from storage.database import init_db
 from generator.data_generator import generate_ai_constraint_cases, generate_cross_field_case
+from executor.state_helpers import fill_path_params_with_value, _is_id_like_name, find_id_like_field, create_resource_for_put_test, cleanup_created_resource
 
 def get_default_path_value(param_schema: dict | None) -> str:
     param_type = (param_schema or {}).get("type", "integer")
@@ -64,8 +65,7 @@ def fill_path_params(path: str, param_schema: dict | None = None) -> str:
     value = get_default_path_value(param_schema)
     return re.sub(r"\{[^}]+\}", value, path)
 
-def fill_path_params_with_value(path: str, value: str) -> str:
-    return re.sub(r"\{[^}]+\}", value, path)
+
 
 def attach_schema_conformance(result: dict, spec: dict, endpoint: dict) -> dict:
     response_schema = get_response_schema(spec, endpoint, str(result["status_code"]))
@@ -88,27 +88,8 @@ def build_query_string(params: dict) -> str:
 
     return "?" + "&".join(parts)
 
-def find_id_like_field(schema: dict, path_param_name: str = None) -> str | None:
-    properties = schema.get("properties", {})
 
-    if path_param_name and path_param_name in properties:
-        return path_param_name
 
-    for field_name, field_schema in properties.items():
-        if field_schema.get("type") != "integer":
-            continue
-        if _is_id_like_name(field_name):
-            return field_name
-
-    return None
-
-def _is_id_like_name(field_name: str) -> bool:
-    #snake_case
-    snake_parts = field_name.lower().split("_")
-    if "id" in snake_parts:
-        return True
-    camel_parts = re.findall(r'[A-Z]+(?=[A-Z][a-z]|\b)|[A-Z][a-z0-9]*|[a-z0-9]+', field_name)
-    return any(part.lower() == "id" for part in camel_parts)
 
 def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None) -> tuple[list[dict], list[dict]]:
     if seed is not None:
@@ -131,36 +112,77 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             if category_filter is None or constants.VALID_DATA in category_filter:
                 #валидни
-                valid_data = generate_valid_object(schema)
-                if endpoint["method"] == "PUT" and "{" in endpoint["path"]:
-                    path_param_match = re.search(r"\{([^}]+)\}", endpoint["path"])
-                    path_param_name = path_param_match.group(1) if path_param_match else None
+                if endpoint["method"] == "PUT":
+                    setup = create_resource_for_put_test(base_url, spec, endpoints, endpoint)
+                    if setup is not None:
+                        valid_data = generate_valid_object(schema)
+                        if setup["id_field"]:
+                            valid_data[setup["id_field"]] = setup["id"]
 
-                    id_field = find_id_like_field(schema, path_param_name)
-                    if id_field and path_param_schema:
-                        path_value = get_default_path_value(path_param_schema)
-                        if path_param_schema.get("type") == "integer":
-                            valid_data[id_field] = int(path_value)
-                        elif path_param_schema.get("type") == "number":
-                            valid_data[id_field] = float(path_value)
-                        else:
-                            valid_data[id_field] = path_value
-                
-                result = execute_test(base_url, endpoint["method"], filled_path, valid_data)
-                result = attach_schema_conformance(result, spec, endpoint)
-                result["test_type"] = "valid"
-                result["category"] = constants.VALID_DATA
-                result["field"] = None
-                result["expected_status"] = 200
-                result["description"] = "Valid data"
-                results.append(result)
+                        result = execute_test(base_url, endpoint["method"], setup["path"], valid_data)
+                        cleanup_created_resource(base_url, endpoints, setup["resource_path"], setup["id"])
+                        result = attach_schema_conformance(result, spec, endpoint)
+                        result["test_type"] = "valid"
+                        result["category"] = constants.VALID_DATA
+                        result["field"] = None
+                        result["expected_status"] = 200
+                        result["description"] = "Valid data"
+                        results.append(result)
+
+                else:
+                    valid_data = generate_valid_object(schema)
+                    result = execute_test(base_url, endpoint["method"], filled_path, valid_data)                
+                    result = attach_schema_conformance(result, spec, endpoint)
+                    result["test_type"] = "valid"
+                    result["category"] = constants.VALID_DATA
+                    result["field"] = None
+                    result["expected_status"] = 200
+                    result["description"] = "Valid data"
+                    results.append(result)
 
 
             #невалидни
             for case in generate_invalid_objects(schema):
+
                 if category_filter is not None and case["category"] not in category_filter:
                     continue
-                result = execute_test(base_url, endpoint["method"], filled_path, case["data"])
+
+                invalid_put_setup = None
+
+                if endpoint["method"] == "PUT":
+                    invalid_put_setup = create_resource_for_put_test(base_url, spec, endpoints, endpoint)
+
+                test_path = filled_path
+
+                if endpoint["method"] == "PUT" and invalid_put_setup is not None:
+                    test_path = invalid_put_setup["path"]
+
+                    id_field = invalid_put_setup["id_field"]
+                    if id_field in case["data"] and case["field"] != id_field:
+                        case["data"][id_field] = invalid_put_setup["id"]
+
+                result = execute_test(base_url, endpoint["method"], test_path, case["data"])
+
+                if endpoint["method"] == "PUT" and invalid_put_setup is not None:
+                    cleanup_created_resource(
+                        base_url,
+                        endpoints,
+                        invalid_put_setup["resource_path"],
+                        invalid_put_setup["id"],
+                    )
+
+                    id_field = invalid_put_setup["id_field"]
+                    if case["field"] == id_field:
+                        mutated_id = case["data"].get(id_field)
+
+                        if mutated_id is not None and mutated_id != invalid_put_setup["id"]:
+                            cleanup_created_resource(
+                                base_url,
+                                endpoints,
+                                invalid_put_setup["resource_path"],
+                                mutated_id,
+                            )
+                    
                 result = attach_schema_conformance(result, spec, endpoint)
                 result["test_type"] = "invalid"
                 result["category"] = case["category"]
@@ -184,17 +206,6 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             put_id_sync = prepare_put_id_sync(base_url,endpoint,schema,path_param_schema,)
             if category_filter is None or constants.AI_IMPLICIT_CONSTRAINT_VIOLATION in category_filter or constants.AI_IMPLICIT_CONSTRAINT_VALID in category_filter:
-                
-                # if endpoint["method"] == "PUT" and "{" in endpoint["path"]:
-                #     path_param_match = re.search(r"\{([^}]+)\}", endpoint["path"])
-                #     path_param_name = path_param_match.group(1) if path_param_match else None
-                #     id_field = find_id_like_field(schema, path_param_name)
-                #     if id_field and path_param_schema:
-                #         base_path = re.sub(r"/\{[^}]+\}$", "", endpoint["path"])
-                #         real_id = get_real_id_from_list(base_url, base_path, path_param_name) if path_param_name else None
-                #         path_value = real_id if real_id is not None else get_default_path_value(path_param_schema)
-                #         sync_value = int(path_value) if path_param_schema.get("type") == "integer" else path_value
-                #         put_id_sync = {"field": id_field, "value": sync_value}
 
                 #print("DEBUG put_id_sync:", put_id_sync)
                 for ai_case in generate_ai_constraint_cases(schema, put_id_sync):
@@ -587,8 +598,10 @@ def cleanup_if_unexpectedly_succeeded(base_url: str, endpoints: list[dict], endp
 if __name__ == "__main__":
     init_db()
 
+
+    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["negative_value"])
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["ai_cross_field_violation"])
-    results, skipped = run_all_tests("http://127.0.0.1:8000")
+    #results, skipped = run_all_tests("http://127.0.0.1:8000")
     analysis = analyze_results(results)
     print_report(analysis)
     if skipped:
