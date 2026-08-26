@@ -2,6 +2,7 @@ import string
 import random
 import exrex
 from generator import constants
+from ai.constraint_mining import mine_implicit_constraint
 
 def generate_valid_object(schema: dict) -> dict:
     properties = schema.get("properties", {})
@@ -383,6 +384,59 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
 
     return test_cases
 
+from concurrent.futures import ThreadPoolExecutor
+
+def generate_ai_constraint_cases(schema: dict, put_id_sync: dict | None = None) -> list[dict]:
+
+    properties = schema.get("properties", {})
+    test_cases = []
+    field_items = list(properties.items())
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        ai_results = list(executor.map(lambda item: (item[0], mine_implicit_constraint(item[0], item[1])), field_items))
+
+
+    
+    #ai_result = mine_implicit_constraint(field_name, field_schema)
+    for field_name, ai_result in ai_results:
+        if ai_result is None:
+            continue
+
+        #Invalid case
+        invalid_obj = generate_valid_object(schema)
+        if put_id_sync:
+            invalid_obj[put_id_sync["field"]] = put_id_sync["value"]
+        invalid_obj[field_name] = ai_result["suggested_invalid_example"]
+
+        test_cases.append({
+            "category": constants.AI_IMPLICIT_CONSTRAINT_VIOLATION,
+            "field": field_name,
+            "expected_status": 422,
+            "description": (
+                f"AI-detected implicit constraint for field '{field_name}:'"
+                f"{ai_result['constraint_description']} "
+                f"(heuristic, not formally declared in schema)"
+                ),
+            "data": invalid_obj,
+        })
+
+        #Valid case
+        valid_obj = generate_valid_object(schema)
+        if put_id_sync:
+            valid_obj[put_id_sync["field"]] = put_id_sync["value"]
+        valid_obj[field_name] = ai_result["suggested_valid_example"]
+        test_cases.append({
+            "category": constants.AI_IMPLICIT_CONSTRAINT_VALID,
+            "field": field_name,
+            "expected_status": 200,
+            "description": (
+                f"AI-suggested valid example for field '{field_name}:' "
+                f"satisfying implicit constraint: {ai_result['constraint_description']} "
+                ),
+            "data": valid_obj,
+        })
+
+    return test_cases
 
 def get_skipped_categories(schema: dict) -> list[dict]:
     properties = schema.get("properties", {})

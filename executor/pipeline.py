@@ -13,7 +13,7 @@ from analyzer.report import analyze_results, print_report
 from analyzer.header_checks import check_allowed_header_present, check_accept_post_header_present
 from storage.repository import save_run
 from storage.database import init_db
-
+from generator.data_generator import generate_ai_constraint_cases
 
 def get_default_path_value(param_schema: dict | None) -> str:
     param_type = (param_schema or {}).get("type", "integer")
@@ -148,6 +148,30 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["expected_status"] = mass_assignment_case["expected_status"]
                 result["description"] = mass_assignment_case["description"]
                 results.append(result)
+
+            if category_filter is None or constants.AI_IMPLICIT_CONSTRAINT_VIOLATION in category_filter or constants.AI_IMPLICIT_CONSTRAINT_VALID in category_filter:
+                put_id_sync = None
+                if endpoint["method"] == "PUT" and "{" in endpoint["path"]:
+                    path_param_match = re.search(r"\{([^}]+)\}", endpoint["path"])
+                    path_param_name = path_param_match.group(1) if path_param_match else None
+                    id_field = find_id_like_field(schema, path_param_name)
+                    if id_field and path_param_schema:
+                        base_path = re.sub(r"/\{[^}]+\}$", "", endpoint["path"])
+                        real_id = get_real_id_from_list(base_url, base_path, path_param_name) if path_param_name else None
+                        path_value = real_id if real_id is not None else get_default_path_value(path_param_schema)
+                        sync_value = int(path_value) if path_param_schema.get("type") == "integer" else path_value
+                        put_id_sync = {"field": id_field, "value": sync_value}
+                #print("DEBUG put_id_sync:", put_id_sync)
+                for ai_case in generate_ai_constraint_cases(schema, put_id_sync):
+                    #print("DEBUG ai_case field:", ai_case["field"], "id in data:", ai_case["data"].get(put_id_sync["field"]) if put_id_sync else "N/A")
+                    result = execute_test(base_url, endpoint["method"], filled_path, ai_case["data"])
+                    result = attach_schema_conformance(result, spec, endpoint)
+                    result["test_type"] = "invalid"
+                    result["category"] = ai_case["category"]
+                    result["field"] = ai_case["field"]
+                    result["expected_status"] = ai_case["expected_status"]
+                    result["description"] = ai_case["description"]
+                    results.append(result)
             
             if category_filter is  None or constants.MALFORMED_JSON in category_filter:
                 for case in generate_malformed_json_cases():

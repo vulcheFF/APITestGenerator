@@ -51,3 +51,7 @@ MASS_ASSIGNMENT = "mass_assignment"
 #### State-consistency ####
 DELETE_IDEMPOTENCY = "delete_idempotency"
 PUT_IDEMPOTENCY = "put_idempotency"
+
+#### AI-assisted ####
+AI_IMPLICIT_CONSTRAINT_VIOLATION = "ai_implicit_constraint_violation"
+AI_IMPLICIT_CONSTRAINT_VALID = "ai_implicit_constraint_valid"

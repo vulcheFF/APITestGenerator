@@ -30,6 +30,8 @@ SEVERITY_MAP = {
     constants.EMPTY_ARRAY: "INFO",
     constants.DELETE_IDEMPOTENCY: "HIGH",
     constants.PUT_IDEMPOTENCY: "HIGH",
+    constants.AI_IMPLICIT_CONSTRAINT_VIOLATION: "MEDIUM",
+    constants.AI_IMPLICIT_CONSTRAINT_VALID: "MEDIUM",
 }
 
 
