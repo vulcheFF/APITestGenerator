@@ -11,7 +11,7 @@ def query_ollama(prompt: str, timeout: int = 30) -> str | None:
             "prompt": prompt,
             "stream": False,
             "format": "json",
-
+            "options": {"temperature":0}
             }, timeout=timeout)
         response.raise_for_status()
         return response.json()["response"]
