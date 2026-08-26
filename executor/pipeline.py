@@ -164,7 +164,10 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 #print("DEBUG put_id_sync:", put_id_sync)
                 for ai_case in generate_ai_constraint_cases(schema, put_id_sync):
                     #print("DEBUG ai_case field:", ai_case["field"], "id in data:", ai_case["data"].get(put_id_sync["field"]) if put_id_sync else "N/A")
-                    result = execute_test(base_url, endpoint["method"], filled_path, ai_case["data"])
+                    ai_test_path = filled_path
+                    if put_id_sync:
+                        ai_test_path = fill_path_params_with_value(endpoint["path"], str(put_id_sync["value"]))
+                    result = execute_test(base_url, endpoint["method"], ai_test_path, ai_case["data"])
                     result = attach_schema_conformance(result, spec, endpoint)
                     result["test_type"] = "invalid"
                     result["category"] = ai_case["category"]

@@ -9,6 +9,13 @@ def build_field_context(field_name: str, field_schema: dict) -> str:
         parts.append(f"Description: {field_schema['description']}")
     if field_schema.get("example") is not None:
         parts.append(f"Example value: {field_schema['example']}")
+
+    if field_schema.get("type") == "object" and field_schema.get("properties"):
+        nested_props = ", ".join(
+            f"{name} ({prop.get('type', 'unknown')})" for name, prop in field_schema["properties"].items()
+        )
+        parts.append(f"This is a nested OBJECT with properties: {nested_props}")
+
     return "\n".join(parts)
 
 
@@ -18,24 +25,30 @@ def mine_implicit_constraint(field_name: str, field_schema: dict) -> dict | None
         return None
     context = build_field_context(field_name, field_schema)
     declared_type = field_schema.get("type", "unknown")
+    type_hint = ""
+    if declared_type == "object":
+        type_hint = "\nIMPORTANT: Since this field is an OBJECT, suggested_valid_example and suggested_invalid_example must be JSON objects (not plain strings), matching the nested properties described above."
+
 
     prompt = f"""You are analyzing a REST API field to find implicit constraints not captured in its formal JSON Schema type.
 
 {context}
-Declared JSON Schema type: {declared_type}
+Declared JSON Schema type: {declared_type}{type_hint}
 
 Based ONLY on the field name, title, description, and example above, does this field imply a specific format or constraint that a generic "{declared_type}" type would NOT enforce (e.g. email format, URL format, phone format, date format, specific value range)?
 
 Respond ONLY with valid JSON in this exact structure:
-{{"has_implicit_constraint": true/false, "constraint_description": "short description or empty string", "suggested_valid_example": "a realistic example value that correctly satisfies this implicit constraint", "suggested_invalid_example": "an example value that violates this implicit constraint but still matches the declared type"}}"""
-
+{{"has_implicit_constraint": true/false, "constraint_description": "short description or empty string", "suggested_valid_example": "a realistic example value (JSON object if the field type is object) that correctly satisfies this implicit constraint", "suggested_invalid_example": "an example value that violates this implicit constraint but still matches the declared type"}}"""
     raw_response = query_ollama(prompt)
+    print("DEBUG raw_response:", repr(raw_response))
     if raw_response is None:
         return None
 
     try:
         result = json.loads(raw_response)
+        print("DEBUG parsed:", result)
         if not result.get("has_implicit_constraint"):
+            print("DEBUG: has_implicit_constraint is False/missing")
             return None
         return {
             "field": field_name,
@@ -44,4 +57,5 @@ Respond ONLY with valid JSON in this exact structure:
             "suggested_invalid_example": result.get("suggested_invalid_example"),
         }
     except (json.JSONDecodeError, KeyError):
+        print("DEBUG JSON parse error:", e)
         return None
