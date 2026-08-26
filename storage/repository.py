@@ -1,4 +1,5 @@
 import json
+from analyzer.report import is_test_passed
 from storage.database import get_session, engine
 from storage.models import TestRun, TestResult, Issue
 from sqlmodel import Session, select
@@ -18,8 +19,8 @@ def save_run(base_url: str, results: list[dict], analysis: dict) -> int:
 
         for r in results:
             expected = r.get("expected_status")
-            actual = r["status_code"]
-            is_passed = (expected is None) or (actual == expected)
+            
+            is_passed = is_test_passed(r)
             result_row = TestResult(
                 run_id=run.id,
                 method=r["method"],

@@ -33,7 +33,7 @@ SEVERITY_MAP = {
     constants.AI_IMPLICIT_CONSTRAINT_VIOLATION: "MEDIUM",
     constants.AI_IMPLICIT_CONSTRAINT_VALID: "MEDIUM",
     constants.AI_CROSS_FIELD_VIOLATION: "MEDIUM",
-    
+
 }
 
 
@@ -58,12 +58,36 @@ def determine_severity(category: str) -> str:
 def is_acceptable_error_status(actual_status: int, expected_status: int) -> bool:
     if actual_status == expected_status:
         return True
-    if 400 <= actual_status < 500:
+    if 400 <= actual_status < 500 and 400 <= actual_status <500:
         return True
 
     return False
 
+def _status_matches_expectation(actual_status, expected_status) -> bool:
+    if expected_status is None:
+        return True
+    if actual_status is None:
+        return False
 
+    return (is_acceptable_error_status(actual_status, expected_status) if expected_status >= 400 else actual_status==expected_status)
+
+
+
+def is_test_passed(r: dict) -> bool:
+    if r.get("error"):
+        return False
+
+    expected = r.get("expected_status")
+    if expected is None:
+        return True
+    
+    if not _status_matches_expectation(r.get("status_code"), expected):
+        return False
+    
+    if r.get("schema_conformance_errors"):
+        return False
+
+    return True
 
 def analyze_results(results: list[dict])-> dict:
     total = len(results)
@@ -73,6 +97,18 @@ def analyze_results(results: list[dict])-> dict:
     for r in results:
         expected = r.get("expected_status")
         actual = r["status_code"]
+
+
+        if is_test_passed(r):
+            passed.append({
+                "method": r["method"],
+                "path": r["path"],
+                "category": r.get("category"),
+                "field": r.get("field"),
+                "description": r["description"],                
+                "status_code": actual,
+            })
+            continue
 
 
         if r.get("error"):
@@ -87,24 +123,7 @@ def analyze_results(results: list[dict])-> dict:
                 "severity": "HIGH",
 
             })
-            continue
-        
-        if expected is None:
-            passed.append({
-                "method": r["method"],
-                "path": r["path"],
-                "category": r.get("category"),
-                "field": r.get("field"),
-                "description": r["description"],                
-                "status_code": actual,
-            })
-            continue
-
-        is_ok = (
-            is_acceptable_error_status(actual,expected) if expected >=400 else actual == expected
-        )
-
-        if not is_ok:    
+        elif not _status_matches_expectation(actual,expected):
             issues.append({
                 "method": r["method"],
                 "path": r["path"],
@@ -117,27 +136,67 @@ def analyze_results(results: list[dict])-> dict:
 
             })
         else:
-            conformance_errors  = r.get("schema_conformance_errors")
-            if conformance_errors:
-                issues.append({
-                    "method": r["method"],
-                    "path": r["path"],
-                    "category": constants.RESPONSE_SCHEMA_MISMATCH,
-                    "field": r.get("field"),
-                    "description": f"{r['description']} — response body does not comply with the declared schema: {'; '.join(conformance_errors)}",
-                    "expected_status": expected,
-                    "status_code": actual,
-                    "severity": determine_severity(constants.RESPONSE_SCHEMA_MISMATCH),
-                })
-            else:
-                passed.append({
-                    "method": r["method"],
-                    "path": r["path"],
-                    "category": r.get("category"),
-                    "field": r.get("field"),
-                    "description": r["description"],                
-                    "status_code": actual,
-                })
+            conformance_errors = r.get("schema_conformance_errors")  
+            issues.append({
+                "method": r["method"],
+                "path": r["path"],
+                "category": constants.RESPONSE_SCHEMA_MISMATCH,
+                "field": r.get("field"),
+                "description": f"{r["description"]} - response body does not comply with the daclared schema {'; '.join(conformance_errors)}",
+                "expected_status": expected,
+                "status_code": actual,
+                "severity": determine_severity(constants.RESPONSE_SCHEMA_MISMATCH),
+
+            })
+        # if expected is None:
+        #     passed.append({
+        #         "method": r["method"],
+        #         "path": r["path"],
+        #         "category": r.get("category"),
+        #         "field": r.get("field"),
+        #         "description": r["description"],                
+        #         "status_code": actual,
+        #     })
+        #     continue
+
+        # is_ok = (
+        #     is_acceptable_error_status(actual,expected) if expected >=400 else actual == expected
+        # )
+
+        # if not is_ok:    
+        #     issues.append({
+        #         "method": r["method"],
+        #         "path": r["path"],
+        #         "category": r.get("category"),
+        #         "field": r.get("field"),
+        #         "description": r["description"],
+        #         "expected_status": expected,
+        #         "status_code": actual,
+        #         "severity": determine_severity(r.get("category")),
+
+        #     })
+        # else:
+        #     conformance_errors  = r.get("schema_conformance_errors")
+        #     if conformance_errors:
+        #         issues.append({
+        #             "method": r["method"],
+        #             "path": r["path"],
+        #             "category": constants.RESPONSE_SCHEMA_MISMATCH,
+        #             "field": r.get("field"),
+        #             "description": f"{r['description']} — response body does not comply with the declared schema: {'; '.join(conformance_errors)}",
+        #             "expected_status": expected,
+        #             "status_code": actual,
+        #             "severity": determine_severity(constants.RESPONSE_SCHEMA_MISMATCH),
+        #         })
+        #     else:
+        #         passed.append({
+        #             "method": r["method"],
+        #             "path": r["path"],
+        #             "category": r.get("category"),
+        #             "field": r.get("field"),
+        #             "description": r["description"],                
+        #             "status_code": actual,
+        #         })
 
 
     return {
