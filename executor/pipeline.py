@@ -239,6 +239,11 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["expected_status"] = ai_case["expected_status"]
                     result["description"] = ai_case["description"]
                     results.append(result)
+                    if (endpoint["method"]=="POST" and ai_case["category"] == constants.AI_IMPLICIT_CONSTRAINT_VALID and result.get("status_code") is not None and 200<=result["status_code"] <300):
+                        response_body = result.get("response_body")
+                        id_field = find_id_like_field(schema)
+                        if (id_field and isinstance(response_body,dict) and id_field in response_body):
+                            cleanup_created_resource(base_url, endpoints, endpoint["path"], response_body[id_field])
                     if endpoint["method"] == "POST":
                         cleanup_if_unexpectedly_succeeded(base_url, endpoints, endpoint, result, schema)
                   
@@ -677,9 +682,9 @@ if __name__ == "__main__":
     init_db()
 
 
-    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["wrong_content_type"])
+    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["wrong_content_type"])
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["ai_implicit_constraint_violation", "ai_implicit_constraint_valid", "ai_cross_field_violation"])
-    #results, skipped = run_all_tests("http://127.0.0.1:8000")
+    results, skipped = run_all_tests("http://127.0.0.1:8000")
     analysis = analyze_results(results)
     print_report(analysis)
     if skipped:
