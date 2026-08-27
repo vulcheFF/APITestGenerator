@@ -283,7 +283,17 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             if category_filter is  None or constants.MALFORMED_JSON in category_filter:
                 for case in generate_malformed_json_cases():
-                    result = execute_test(base_url, endpoint["method"], filled_path, raw_body=case["body"])
+                    malformed_put_setup = None
+                    test_path = filled_path
+                    if endpoint["method"] == "PUT":
+                        malformed_put_setup = create_resource_for_stateful_test(base_url, spec, endpoints, endpoint)
+                        if malformed_put_setup is not None:
+                            test_path = malformed_put_setup["path"]
+
+                             
+                    result = execute_test(base_url, endpoint["method"], test_path, raw_body=case["body"])
+                    if malformed_put_setup is not None:
+                        cleanup_created_resource(base_url, endpoints, malformed_put_setup["resource_path"], malformed_put_setup["id"])
                     # result = attach_schema_conformance(result, spec, endpoint)
                     result["test_type"] = "invalid"
                     result["category"] = constants.MALFORMED_JSON
@@ -294,7 +304,21 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
             if category_filter is  None or constants.WRONG_CONTENT_TYPE in category_filter:
                 valid_data_for_ct_test = generate_valid_object(schema)
                 import json as json_module
-                result = execute_test(base_url, endpoint["method"], filled_path, raw_body=json_module.dumps(valid_data_for_ct_test), content_type="text/plain")
+
+                wrong_ct_put_setup = None
+                test_path = filled_path
+
+                if endpoint["method"] == "PUT":
+                    wrong_ct_put_setup = create_resource_for_stateful_test(base_url, spec, endpoints, endpoint)
+                    if wrong_ct_put_setup is not None:
+                        test_path = wrong_ct_put_setup["path"]
+                        id_field = wrong_ct_put_setup["id_field"]
+                        if id_field in valid_data_for_ct_test:
+                            valid_data_for_ct_test[id_field] = wrong_ct_put_setup["id"]
+                            
+                result = execute_test(base_url, endpoint["method"], test_path, raw_body=json_module.dumps(valid_data_for_ct_test), content_type="text/plain")
+                if wrong_ct_put_setup is not None:
+                    cleanup_created_resource(base_url, endpoints, wrong_ct_put_setup["resource_path"], wrong_ct_put_setup["id"])
                 has_accept_post_header = check_accept_post_header_present(result.get("response_headers",{}))
                 result["test_type"] = "invalid"
                 result["category"] = constants.WRONG_CONTENT_TYPE
@@ -653,7 +677,7 @@ if __name__ == "__main__":
     init_db()
 
 
-    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["put_idempotency"])
+    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["wrong_content_type"])
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["ai_implicit_constraint_violation", "ai_implicit_constraint_valid", "ai_cross_field_violation"])
     #results, skipped = run_all_tests("http://127.0.0.1:8000")
     analysis = analyze_results(results)
