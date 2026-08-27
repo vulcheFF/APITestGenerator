@@ -136,6 +136,66 @@ def _valid_value_for_negative_test(field_schema: dict):
 
 
 def generate_invalid_objects(schema: dict) -> list[dict]:
+
+    if schema.get("type") == "array":
+        items_schema = schema.get("items", {})
+        test_cases = []
+
+        #wrong root type
+        test_cases.append({
+            "category": constants.TYPE_MISMATCH,
+            "field": None,
+            "expected_status": 422,
+            "description": f"Invalid root: expected array",
+            "data": _invalid_type_value(schema),
+        })
+
+        #wrong item type
+        if items_schema:
+            test_cases.append({
+                "category": constants.INVALID_ARRAY_ITEM_TYPE,
+                "field": None,
+                "expected_status": 422,
+                "description": f"Root array with invalid item type",
+                "data": [_invalid_type_value(items_schema)],
+            })
+
+        #min items
+        min_items = schema.get("minItems")
+        if min_items is not None and min_items > 0:
+            test_cases.append({
+                "category": constants.ARRAY_BOUNDARY,
+                "field": None,
+                "expected_status": 422,
+                "description": f"Root array below minItems",
+                "data": [generate_valid_value(items_schema) for _ in range(min_items - 1)],
+            })
+
+        #max items
+        max_items = schema.get("maxItems")
+        if min_items is not None:
+            test_cases.append({
+                "category": constants.ARRAY_BOUNDARY,
+                "field": None,
+                "expected_status": 422,
+                "description": f"Root array above maxItems",
+                "data": [generate_valid_value(items_schema) for _ in range(max_items + 1)],
+            })
+
+        #unique items
+        if schema.get("uniqueItems") is True and items_schema:
+            duplicate_value = generate_valid_value(items_schema)
+            test_cases.append({
+                "category": constants.DUPLICATE_ARRAY_ITEMS,
+                "field": None,
+                "expected_status": 422,
+                "description": f"Root array with duplicate items",
+                "data": [duplicate_value, duplicate_value],
+            })
+
+        return test_cases
+
+
     properties = schema.get("properties", {})
     required_fields = schema.get("required", [])
     test_cases = []

@@ -176,7 +176,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     test_path = invalid_put_setup["path"]
 
                     id_field = invalid_put_setup["id_field"]
-                    if id_field in case["data"] and case["field"] != id_field:
+                    if(isinstance(case["data"], dict) and id_field in case["data"] and case["field"] != id_field):
                         case["data"][id_field] = invalid_put_setup["id"]
 
                 result = execute_test(base_url, endpoint["method"], test_path, case["data"])
