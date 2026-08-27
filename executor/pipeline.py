@@ -131,7 +131,11 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
                 else:
                     valid_data = generate_valid_object(schema)
-                    result = execute_test(base_url, endpoint["method"], filled_path, valid_data)                
+                    result = execute_test(base_url, endpoint["method"], filled_path, valid_data)  
+                    response_body = result.get("response_body")
+                    id_field = find_id_like_field(schema)
+                    if (id_field and isinstance(response_body, dict) and id_field in response_body):
+                        cleanup_created_resource(base_url, endpoints, endpoint["path"], response_body[id_field])              
                     result = attach_schema_conformance(result, spec, endpoint)
                     result["test_type"] = "valid"
                     result["category"] = constants.VALID_DATA
@@ -583,12 +587,14 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
     second_put["field"] = None
     second_put["expected_status"] = first_put["status_code"]
     second_put["test_type"] = "sequence"
-    second_put["description"] =  (
+    second_put["description"] = (
         f"Second PUT with identical data (id={created_id}): first status "
         f"{first_put['status_code']}, second status {second_put['status_code']} "
         f"({'consistent' if is_consistent else 'INCONSISTENT'})"
     )
-
+    if created_id is not None:
+        resource_path = re.sub(r"/\{[^}]+\}$","",put_endpoint["path"])
+        cleanup_created_resource(base_url, endpoints, resource_path, created_id)
     return second_put
 
 
@@ -647,7 +653,7 @@ if __name__ == "__main__":
     init_db()
 
 
-    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["valid_id"])
+    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["put_idempotency"])
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["ai_implicit_constraint_violation", "ai_implicit_constraint_valid", "ai_cross_field_violation"])
     #results, skipped = run_all_tests("http://127.0.0.1:8000")
     analysis = analyze_results(results)
