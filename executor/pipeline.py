@@ -117,10 +117,11 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 if endpoint["method"] == "PUT":
                     setup = create_resource_for_put_test(base_url, spec, endpoints, endpoint)
                     if setup is not None:
-                        valid_data = generate_valid_object(schema)
-                        if setup["id_field"]:
+                        valid_data = generate_valid_value(schema)
+                        if setup["id_field"] and isinstance(valid_data, dict):
                             valid_data[setup["id_field"]] = setup["id"]
 
+                        #print(    "DEBUG VALID DATA:",    endpoint["method"],    endpoint["path"],    valid_data,)
                         result = execute_test(base_url, endpoint["method"], setup["path"], valid_data)
                         cleanup_created_resource(base_url, endpoints, setup["resource_path"], setup["id"])
                         result = attach_schema_conformance(result, spec, endpoint)
@@ -132,7 +133,8 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         results.append(result)
 
                 else:
-                    valid_data = generate_valid_object(schema)
+                    valid_data = generate_valid_value(schema)
+                    #print(    "DEBUG VALID DATA:",    endpoint["method"],    endpoint["path"],    valid_data,)
                     result = execute_test(base_url, endpoint["method"], filled_path, valid_data)  
                     response_body = result.get("response_body")
                     id_field = find_id_like_field(schema)
@@ -476,7 +478,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 if case["category"] == constants.VALID_ID:
                     result["expected_status"] = get_expected_success_status(endpoint) or 200
                 else:
-                    result["expected_status"] == case["expected_status"]
+                    result["expected_status"] = case["expected_status"]
                 result["description"] = case["description"] if value == case["value"] else f"{case['description']} (reall id = {value})"
                 results.append(result)
 
@@ -529,6 +531,8 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
     if create_endpoint is None:
         return None
 
+    expected_create_status = (get_expected_success_status(create_endpoint) or 200)
+
     schema = get_request_body_schema(spec, create_endpoint)
     if not schema: 
         return None
@@ -539,7 +543,7 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
     if id_field:
         create_data[id_field] = random.randint(10_000_000,99_999_999)
     create_result = execute_test(base_url, "POST", create_endpoint["path"], create_data)
-    if create_result["status_code"] not in (200,201):
+    if create_result["status_code"] != expected_create_status:
         return {
             "category": constants.DELETE_IDEMPOTENCY,
             "field": None,
@@ -575,11 +579,13 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
     schema = get_request_body_schema(spec,put_endpoint)
     if not schema:
         return None
-
+    
     create_endpoint = find_matching_create_endpoint(endpoints, put_endpoint["path"])
+    
     if create_endpoint is None:
         return None
 
+    expected_create_status = (get_expected_success_status(create_endpoint) or 200)
     create_schema = get_request_body_schema(spec, create_endpoint)
     if not create_schema:
         return None
@@ -592,7 +598,7 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
         create_data[id_field] = random.randint(10_000_000,99_999_999)
 
     create_result = execute_test(base_url, "POST", create_endpoint["path"], create_data)
-    if create_result["status_code"] not in (200,201):
+    if create_result["status_code"] != expected_create_status:
         return {
             "category": constants.PUT_IDEMPOTENCY,
             "field": None,
@@ -693,9 +699,10 @@ if __name__ == "__main__":
     init_db()
 
 
-    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["valid_id"])
+    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter="valid_data")
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["ai_implicit_constraint_violation", "ai_implicit_constraint_valid", "ai_cross_field_violation"])
     #results, skipped = run_all_tests("http://127.0.0.1:8000")
+    #results, skipped = run_all_tests("https://petstore3.swagger.io/api/v3", category_filter="valid_data")
     analysis = analyze_results(results)
     print_report(analysis)
     if skipped:
