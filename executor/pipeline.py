@@ -4,7 +4,7 @@ import time
 from urllib.parse import quote
 from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
-from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema
+from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema, get_path_params_schema
 from generator.spec_parser import get_declared_methods_for_path, get_undeclared_method, find_matching_create_endpoint
 from generator.spec_parser import get_expected_success_status, get_success_status_codes
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value, _invalid_type_value, generate_mass_assignment_case, get_skipped_query_categories
@@ -94,7 +94,13 @@ def build_query_string(params: dict) -> str:
 
     return "?" + "&".join(parts)
 
+def fill_path_params_with_values(path: str, values: dict[str, object],) -> str:
+    result = path
 
+    for name, value in values.items():
+        result = result.replace("{" + name + "}", quote(str(value), safe=""))
+
+    return result
 
 
 def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None) -> tuple[list[dict], list[dict]]:
@@ -461,40 +467,86 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     })
                     
         if endpoint["method"] in ("GET", "DELETE") and "{" in endpoint["path"]:
-            param_schema = get_path_param_schema(endpoint)
-            base_path = re.sub(r"/\{[^}]+\}$", "", endpoint["path"])
-            path_param_match = re.search(r"\{([^}]+)\}", endpoint["path"])
-            path_param_name = path_param_match.group(1) if path_param_match else None
-            real_id = get_real_id_from_list(base_url, base_path, path_param_name) if path_param_name else None
 
-            for case in generate_path_param_cases(param_schema):
-                if category_filter is not None and case["category"] not in category_filter:
-                    continue
-                delete_setup = None
-                if (endpoint["method"] == "DELETE" and case["category"] == constants.VALID_ID):
-                    delete_setup = create_resource_for_stateful_test(base_url, spec, endpoints, endpoint)
-                if delete_setup is not None:
-                    value = str(delete_setup["id"])
-                else:
-                    value = real_id if (case["category"] == constants.VALID_ID and real_id is not None) else case["value"]
-                test_path = fill_path_params_with_value(endpoint["path"], value)
-                result = execute_test(base_url, endpoint["method"], test_path, data=None)
-                if delete_setup is not None:
-                    status = result.get("status_code")
-                    if status is None or not(200<=status<300):
-                        cleanup_created_resource(base_url, endpoints, delete_setup["resource_path"], delete_setup["id"])
-                result = attach_schema_conformance(result, spec, endpoint)
-                result["test_type"] = "path_param"
-                result["category"] = case["category"]
-                result["field"] = None
-                if case["category"] == constants.VALID_ID:
-                    success_codes = get_success_status_codes(endpoint)
-                    result["expected_status"] = min(success_codes) if success_codes else 200
-                    result["acceptable_statuses"] = sorted(success_codes) if success_codes else [200]
-                else:
-                    result["expected_status"] = case["expected_status"]
-                result["description"] = case["description"] if value == case["value"] else f"{case['description']} (reall id = {value})"
-                results.append(result)
+            path_params = get_path_params_schema(endpoint)
+
+            if len(path_params) == 1:
+                param_schema = path_params[0]["schema"]
+                path_param_name = path_params[0]["name"]
+
+                base_path = re.sub(r"/\{[^}]+\}$", "", endpoint["path"])
+
+                real_id = (get_real_id_from_list(base_url, base_path, path_param_name,) if path_param_name else None)
+            # param_schema = get_path_param_schema(endpoint)
+            # base_path = re.sub(r"/\{[^}]+\}$", "", endpoint["path"])
+            # path_param_match = re.search(r"\{([^}]+)\}", endpoint["path"])
+            # path_param_name = path_param_match.group(1) if path_param_match else None
+            # real_id = get_real_id_from_list(base_url, base_path, path_param_name) if path_param_name else None
+
+                for case in generate_path_param_cases(param_schema):
+                    if category_filter is not None and case["category"] not in category_filter:
+                        continue
+                    delete_setup = None
+                    if (endpoint["method"] == "DELETE" and case["category"] == constants.VALID_ID):
+                        delete_setup = create_resource_for_stateful_test(base_url, spec, endpoints, endpoint)
+                    if delete_setup is not None:
+                        value = str(delete_setup["id"])
+                    else:
+                        value = real_id if (case["category"] == constants.VALID_ID and real_id is not None) else case["value"]
+                    test_path = fill_path_params_with_value(endpoint["path"], value)
+                    result = execute_test(base_url, endpoint["method"], test_path, data=None)
+                    if delete_setup is not None:
+                        status = result.get("status_code")
+                        if status is None or not(200<=status<300):
+                            cleanup_created_resource(base_url, endpoints, delete_setup["resource_path"], delete_setup["id"])
+                    result = attach_schema_conformance(result, spec, endpoint)
+                    result["test_type"] = "path_param"
+                    result["category"] = case["category"]
+                    result["field"] = None
+                    if case["category"] == constants.VALID_ID:
+                        success_codes = get_success_status_codes(endpoint)
+                        result["expected_status"] = min(success_codes) if success_codes else 200
+                        result["acceptable_statuses"] = sorted(success_codes) if success_codes else [200]
+                    else:
+                        result["expected_status"] = case["expected_status"]
+                    result["description"] = case["description"] if value == case["value"] else f"{case['description']} (reall id = {value})"
+                    results.append(result)
+            else:
+                for target_param in path_params:
+                    target_name = target_param["name"]
+                    target_schema = target_param["schema"]
+
+                    for case in generate_path_param_cases(target_schema):
+                        if (category_filter is not None and case["category"] not in category_filter):
+                            continue
+
+                        if case["category"] == constants.VALID_ID:
+                            continue
+
+                        values = {}
+
+                        for path_param in path_params:
+                            param_name = path_param["name"]
+                            param_schema = path_param["schema"]
+
+                            if param_name == target_name:
+                                values[param_name] = case["value"]
+                            else:
+                                values[param_name] = generate_valid_value(param_schema)
+
+                        test_path = fill_path_params_with_values(endpoint["path"],values)
+                        result = execute_test(base_url, endpoint["method"], test_path, data=None)
+                        result = attach_schema_conformance(result,spec,endpoint)
+                        result["test_type"] = "path_param"
+                        result["category"] = case["category"]
+                        result["field"] = target_name
+                        result["expected_status"] = case["expected_status"]
+                        result["description"] = (
+                            f"{case['description']} "
+                            f"(path parameter: {target_name})"
+                        )
+                        results.append(result)
+
 
 
     if category_filter is None or constants.METHOD_NOT_ALLOWED in category_filter:
@@ -685,7 +737,8 @@ def get_real_id_from_list(base_url: str, list_path: str, path_param_name: str) -
 
 
 def cleanup_if_unexpectedly_succeeded(base_url: str, endpoints: list[dict], endpoint: dict, result: dict, schema: dict):
-    if result.get("status_code") not in (200,201):
+    success_codes = get_success_status_codes(endpoint) or {200}
+    if result.get("status_code") not in success_codes:
         return
 
     expected = result.get("expected_status")
@@ -697,10 +750,17 @@ def cleanup_if_unexpectedly_succeeded(base_url: str, endpoints: list[dict], endp
         return
 
     response_body = result.get("response_body")
+    request_data = result.get("data_sent")
 
-    if not isinstance(response_body, dict) or id_field not in response_body:
+    created_id = None
+
+    if isinstance(response_body, dict) and id_field in response_body:
+        created_id = response_body[id_field]
+    elif isinstance(request_data, dict) and id_field in request_data:
+        created_id = request_data[id_field]
+
+    if created_id is None:
         return
-    created_id = response_body[id_field]
 
     base_path = endpoint["path"]
     delete_endpoint = next( (ep for ep in endpoints if ep["method"] == "DELETE" and re.sub(r"/\{[^}]+\}$","", ep["path"]) == base_path) , None)
@@ -716,7 +776,7 @@ if __name__ == "__main__":
     init_db()
 
 
-    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["list_endpoint","valid_id",])
+    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["valid_id","invalid_id_format","nonexistent_id","negative_id",])
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["put_idempotency","delete_idempotency",])
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["list_endpoint","missing_required_query_param","invalid_query_param_enum","invalid_query_param_value",])
     results, skipped = run_all_tests("http://127.0.0.1:8000")

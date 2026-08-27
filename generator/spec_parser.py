@@ -143,6 +143,18 @@ def get_path_param_schema(endpoint: dict) -> dict | None:
             return param.get("schema", {})
     return None
 
+def get_path_params_schema(endpoint: dict) -> list[dict]:
+    path_params = []
+
+    for param in endpoint.get("parameters", []):
+        if param.get("in") == "path":
+            path_params.append({
+                "name":param.get("name"),
+                "required": param.get("required", True),
+                "schema": param.get("schema", {}),
+            })
+            
+    return path_params
 
 def get_query_params_schema(endpoint: dict) -> list[dict]:
     query_params = []
