@@ -33,8 +33,8 @@ def find_id_like_field(schema: dict, path_param_name: str = None) -> str | None:
 
     return None
 
-def create_resource_for_put_test(base_url: str, spec: dict, endpoints: list[dict], put_endpoint: dict,) -> dict | None:
-    create_endpoint = find_matching_create_endpoint(endpoints, put_endpoint["path"],)
+def create_resource_for_stateful_test(base_url: str, spec: dict, endpoints: list[dict], target_endpoint: dict,) -> dict | None:
+    create_endpoint = find_matching_create_endpoint(endpoints, target_endpoint["path"],)
 
     if create_endpoint is None:
         return None
@@ -69,8 +69,8 @@ def create_resource_for_put_test(base_url: str, spec: dict, endpoints: list[dict
     if created_id is None:
         return None
 
-    test_path = fill_path_params_with_value(put_endpoint["path"], str(created_id))
-    resource_path = re.sub(r"/\{[^}]+\}$", "", put_endpoint["path"])
+    test_path = fill_path_params_with_value(target_endpoint["path"], str(created_id))
+    resource_path = re.sub(r"/\{[^}]+\}$", "", target_endpoint["path"])
     return {
         "id": created_id,
         "id_field": id_field,
@@ -78,7 +78,12 @@ def create_resource_for_put_test(base_url: str, spec: dict, endpoints: list[dict
         "resource_path": resource_path,
         "data": create_data,
     }
-    
+
+#wrapper to not change further code
+def create_resource_for_put_test(base_url: str, spec: dict, endpoints: list[dict], put_endpoint: dict) -> dict | None:
+    return create_resource_for_stateful_test(base_url, spec, endpoints, put_endpoint)
+
+
 def cleanup_created_resource(base_url: str, endpoints: list[dict], resource_path: str, created_id) -> bool:
 
     delete_endpoint = next((ep for ep in endpoints if ep["method"] == "DELETE" and re.sub(r"/\{[^}]+\}$", "", ep["path"]) == resource_path), None)

@@ -22,7 +22,7 @@ class TestResult(SQLModel, table = True):
     expected_status: Optional[int] = None
     passed:bool = True
     description: str
-    status_code: int
+    status_code: Optional[int] = None
     data_sent: Optional[str] = None
 
 
@@ -35,5 +35,5 @@ class Issue(SQLModel, table = True):
     field: Optional[str] = None
     expected_status: Optional[int] = None
     description: str
-    status_code: int
+    status_code: Optional[int] = None
     severity: str        
