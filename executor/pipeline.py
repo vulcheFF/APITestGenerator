@@ -1,11 +1,12 @@
 import re
 import random
 import time
+from urllib.parse import quote
 from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema
 from generator.spec_parser import get_declared_methods_for_path, get_undeclared_method, find_matching_create_endpoint
-from generator.spec_parser import get_expected_success_status
+from generator.spec_parser import get_expected_success_status, get_success_status_codes
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value, _invalid_type_value, generate_mass_assignment_case, get_skipped_query_categories
 from generator.path_param_generator import generate_path_param_cases
 from generator.malformed_json_generator import generate_malformed_json_cases
@@ -80,12 +81,16 @@ def build_query_string(params: dict) -> str:
     if not params:
         return ""
     parts = [] #[f"{key}={value}" for key, value in params.items()]
+
     for key, value in params.items():
+        encoded_key = quote(str(key), safe="")
         if isinstance(value, list):
             for item in value:
-                parts.append(f"{key}={item}")
+                encoded_value = quote(str(item), safe="")
+                parts.append(f"{encoded_key}={encoded_value}")
         else:
-           parts.append(f"{key}={value}") 
+            encoded_value = quote(str(value), safe="")
+            parts.append(f"{encoded_key}={encoded_value}")
 
     return "?" + "&".join(parts)
 
@@ -110,8 +115,11 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             path_param_schema = get_path_param_schema(endpoint)
             filled_path = fill_path_params(endpoint["path"], path_param_schema)
-            expected_success_status = get_expected_success_status(endpoint) or 200
+            #expected_success_status = get_expected_success_status(endpoint) or 200
+            success_codes = get_success_status_codes(endpoint)
 
+            expected_success_status = (min(success_codes) if success_codes else 200)
+            acceptable_success_statuses = (sorted(success_codes) if success_codes else [200])
             if category_filter is None or constants.VALID_DATA in category_filter:
                 #валидни
                 if endpoint["method"] == "PUT":
@@ -129,6 +137,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         result["category"] = constants.VALID_DATA
                         result["field"] = None
                         result["expected_status"] = expected_success_status
+                        result["acceptable_statuses"] = acceptable_success_statuses
                         result["description"] = "Valid data"
                         results.append(result)
 
@@ -145,6 +154,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["category"] = constants.VALID_DATA
                     result["field"] = None
                     result["expected_status"] = expected_success_status
+                    result["acceptable_statuses"] = acceptable_success_statuses
                     result["description"] = "Valid data"
                     results.append(result)
 
@@ -172,24 +182,14 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result = execute_test(base_url, endpoint["method"], test_path, case["data"])
 
                 if endpoint["method"] == "PUT" and invalid_put_setup is not None:
-                    cleanup_created_resource(
-                        base_url,
-                        endpoints,
-                        invalid_put_setup["resource_path"],
-                        invalid_put_setup["id"],
-                    )
+                    cleanup_created_resource(base_url,endpoints,invalid_put_setup["resource_path"],invalid_put_setup["id"],)
 
                     id_field = invalid_put_setup["id_field"]
                     if case["field"] == id_field:
                         mutated_id = case["data"].get(id_field)
 
                         if mutated_id is not None and mutated_id != invalid_put_setup["id"]:
-                            cleanup_created_resource(
-                                base_url,
-                                endpoints,
-                                invalid_put_setup["resource_path"],
-                                mutated_id,
-                            )
+                            cleanup_created_resource(base_url,endpoints,invalid_put_setup["resource_path"],mutated_id,)
                     
                 result = attach_schema_conformance(result, spec, endpoint)
                 result["test_type"] = "invalid"
@@ -239,13 +239,19 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
                     result = attach_schema_conformance(result, spec, endpoint)
                     if ai_case["category"] == constants.AI_IMPLICIT_CONSTRAINT_VALID:
-                        expected_status = get_expected_success_status(endpoint) or 200
+                        success_codes = get_success_status_codes(endpoint)
+
+                        expected_status = (min(success_codes) if success_codes else 200)
+                        acceptable_success_statuses = (sorted(success_codes) if success_codes else [200])
                     else:
                         expected_status = ai_case["expected_status"]
-                    result["test_type"] = "invalid"
+                        acceptable_success_statuses = None
+                    result["test_type"] = ("valid" if ai_case["category"] == constants.AI_IMPLICIT_CONSTRAINT_VALID else "invalid")
                     result["category"] = ai_case["category"]
                     result["field"] = ai_case["field"]
                     result["expected_status"] = expected_status
+                    if acceptable_success_statuses is not None:
+                        result["acceptable_statuses"] = acceptable_success_statuses
                     result["description"] = ai_case["description"]
                     results.append(result)
                     if (endpoint["method"]=="POST" and ai_case["category"] == constants.AI_IMPLICIT_CONSTRAINT_VALID and result.get("status_code") is not None and 200<=result["status_code"] <300):
@@ -352,7 +358,11 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
         if endpoint["method"] == "GET" and "{" not in endpoint["path"]:
             query_params = get_query_params_schema(endpoint)
             required_params = [p for p in query_params if p["required"]]
-            expected_success_status = get_expected_success_status(endpoint) or 200
+           # expected_success_status = get_expected_success_status(endpoint) or 200
+            success_codes = get_success_status_codes(endpoint)
+
+            expected_success_status = (min(success_codes) if success_codes else 200)
+            acceptable_success_statuses = (sorted(success_codes) if success_codes else [200])           
 
             if category_filter is None or constants.LIST_ENDPOINT in category_filter:
                 if required_params:
@@ -367,6 +377,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["category"] = constants.LIST_ENDPOINT
                     result["field"] = None
                     result["expected_status"] = expected_success_status
+                    result["acceptable_statuses"] = acceptable_success_statuses
                     result["description"] = "Get list endpoint with required query params"
                     results.append(result)
 
@@ -439,6 +450,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["category"] = constants.LIST_ENDPOINT
                     result["field"] = None
                     result["expected_status"] = expected_success_status
+                    result["acceptable_statuses"] = acceptable_success_statuses
                     result["description"] = "Get list endpoint (no filters)"
                     results.append(result)
                 for skipped in get_skipped_query_categories(query_params):
@@ -476,7 +488,9 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["category"] = case["category"]
                 result["field"] = None
                 if case["category"] == constants.VALID_ID:
-                    result["expected_status"] = get_expected_success_status(endpoint) or 200
+                    success_codes = get_success_status_codes(endpoint)
+                    result["expected_status"] = min(success_codes) if success_codes else 200
+                    result["acceptable_statuses"] = sorted(success_codes) if success_codes else [200]
                 else:
                     result["expected_status"] = case["expected_status"]
                 result["description"] = case["description"] if value == case["value"] else f"{case['description']} (reall id = {value})"
@@ -531,19 +545,20 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
     if create_endpoint is None:
         return None
 
-    expected_create_status = (get_expected_success_status(create_endpoint) or 200)
+    success_codes = get_success_status_codes(create_endpoint)
+    if not success_codes:
+        success_codes = {200}
 
     schema = get_request_body_schema(spec, create_endpoint)
     if not schema: 
         return None
 
     create_data = generate_valid_object(schema)
-    import random
     id_field = find_id_like_field(schema)
     if id_field:
         create_data[id_field] = random.randint(10_000_000,99_999_999)
     create_result = execute_test(base_url, "POST", create_endpoint["path"], create_data)
-    if create_result["status_code"] != expected_create_status:
+    if create_result.get("status_code") not in success_codes:
         return {
             "category": constants.DELETE_IDEMPOTENCY,
             "field": None,
@@ -585,7 +600,9 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
     if create_endpoint is None:
         return None
 
-    expected_create_status = (get_expected_success_status(create_endpoint) or 200)
+    success_codes = get_success_status_codes(create_endpoint)
+    if not success_codes:
+        success_codes = {200}
     create_schema = get_request_body_schema(spec, create_endpoint)
     if not create_schema:
         return None
@@ -598,7 +615,7 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
         create_data[id_field] = random.randint(10_000_000,99_999_999)
 
     create_result = execute_test(base_url, "POST", create_endpoint["path"], create_data)
-    if create_result["status_code"] != expected_create_status:
+    if create_result.get("status_code") not in success_codes:
         return {
             "category": constants.PUT_IDEMPOTENCY,
             "field": None,
@@ -699,8 +716,9 @@ if __name__ == "__main__":
     init_db()
 
 
-    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter="valid_data")
-    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["ai_implicit_constraint_violation", "ai_implicit_constraint_valid", "ai_cross_field_violation"])
+    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["list_endpoint","valid_id",])
+    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["put_idempotency","delete_idempotency",])
+    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["list_endpoint","missing_required_query_param","invalid_query_param_enum","invalid_query_param_value",])
     results, skipped = run_all_tests("http://127.0.0.1:8000")
     #results, skipped = run_all_tests("https://petstore3.swagger.io/api/v3", category_filter="valid_data")
     analysis = analyze_results(results)

@@ -63,12 +63,15 @@ def is_acceptable_error_status(actual_status: int, expected_status: int) -> bool
 
     return False
 
-def _status_matches_expectation(actual_status, expected_status) -> bool:
+def _status_matches_expectation(actual_status, expected_status, acceptable_statuses = None) -> bool:
     if expected_status is None:
         return True
     if actual_status is None:
         return False
 
+    if acceptable_statuses and expected_status<400 and actual_status in acceptable_statuses:
+        return True
+    
     return (is_acceptable_error_status(actual_status, expected_status) if expected_status >= 400 else actual_status==expected_status)
 
 
@@ -81,7 +84,7 @@ def is_test_passed(r: dict) -> bool:
     if expected is None:
         return True
     
-    if not _status_matches_expectation(r.get("status_code"), expected):
+    if not _status_matches_expectation(r.get("status_code"), expected, r.get("acceptable_statuses")):
         return False
     
     if r.get("schema_conformance_errors"):

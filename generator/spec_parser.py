@@ -51,23 +51,17 @@ def extract_endpoints(spec: dict) -> list[dict]:
     return endpoints
 
 def get_expected_success_status(endpoint: dict) ->  int | None:
-    responses = endpoint.get("responses", {})
-
-    success_codes = []
-
-    for status_code in responses:
-        if not str(status_code).isdigit():
-            continue
-
-        code = int(status_code)
-
-        if 200<= code < 300:
-            success_codes.append(code)
+    success_codes = get_success_status_codes(endpoint)
 
     if not success_codes:
         return None
 
     return min(success_codes)
+
+def get_success_status_codes(endpoint: dict) -> set[int]:
+    responses = endpoint.get("responses", {})
+
+    return {int(status_code) for status_code in responses if str(status_code).isdigit() and 200<= int(status_code) < 300}
 
 def resolve_schema_ref(spec: dict, ref: str) -> dict:
     #ref "#/components/schemas/Book"
