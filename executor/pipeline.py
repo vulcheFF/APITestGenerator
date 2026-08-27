@@ -5,6 +5,7 @@ from analyzer.schema_validator import validate_response_against_schema
 from generator import constants
 from generator.spec_parser import fetch_openapi_spec, extract_endpoints, get_request_body_schema, get_response_schema, get_path_param_schema, get_query_params_schema
 from generator.spec_parser import get_declared_methods_for_path, get_undeclared_method, find_matching_create_endpoint
+from generator.spec_parser import get_expected_success_status
 from generator.data_generator import generate_valid_object, generate_invalid_objects, get_skipped_categories, generate_valid_value, _invalid_type_value, generate_mass_assignment_case, get_skipped_query_categories
 from generator.path_param_generator import generate_path_param_cases
 from generator.malformed_json_generator import generate_malformed_json_cases
@@ -109,6 +110,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             path_param_schema = get_path_param_schema(endpoint)
             filled_path = fill_path_params(endpoint["path"], path_param_schema)
+            expected_success_status = get_expected_success_status(endpoint) or 200
 
             if category_filter is None or constants.VALID_DATA in category_filter:
                 #валидни
@@ -125,7 +127,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         result["test_type"] = "valid"
                         result["category"] = constants.VALID_DATA
                         result["field"] = None
-                        result["expected_status"] = 200
+                        result["expected_status"] = expected_success_status
                         result["description"] = "Valid data"
                         results.append(result)
 
@@ -134,13 +136,13 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result = execute_test(base_url, endpoint["method"], filled_path, valid_data)  
                     response_body = result.get("response_body")
                     id_field = find_id_like_field(schema)
-                    if (id_field and isinstance(response_body, dict) and id_field in response_body):
+                    if id_field and isinstance(response_body, dict) and id_field in response_body:
                         cleanup_created_resource(base_url, endpoints, endpoint["path"], response_body[id_field])              
                     result = attach_schema_conformance(result, spec, endpoint)
                     result["test_type"] = "valid"
                     result["category"] = constants.VALID_DATA
                     result["field"] = None
-                    result["expected_status"] = 200
+                    result["expected_status"] = expected_success_status
                     result["description"] = "Valid data"
                     results.append(result)
 
@@ -210,6 +212,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             #put_id_sync = prepare_put_id_sync(base_url,endpoint,schema,path_param_schema,)
             if category_filter is None or constants.AI_IMPLICIT_CONSTRAINT_VIOLATION in category_filter or constants.AI_IMPLICIT_CONSTRAINT_VALID in category_filter:
+
                 for ai_case in generate_ai_constraint_cases(schema):
                     ai_put_setup = None
                     if endpoint["method"] == "PUT":
@@ -233,10 +236,14 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
 
                     result = attach_schema_conformance(result, spec, endpoint)
+                    if ai_case["category"] == constants.AI_IMPLICIT_CONSTRAINT_VALID:
+                        expected_status = get_expected_success_status(endpoint) or 200
+                    else:
+                        expected_status = ai_case["expected_status"]
                     result["test_type"] = "invalid"
                     result["category"] = ai_case["category"]
                     result["field"] = ai_case["field"]
-                    result["expected_status"] = ai_case["expected_status"]
+                    result["expected_status"] = expected_status
                     result["description"] = ai_case["description"]
                     results.append(result)
                     if (endpoint["method"]=="POST" and ai_case["category"] == constants.AI_IMPLICIT_CONSTRAINT_VALID and result.get("status_code") is not None and 200<=result["status_code"] <300):
@@ -343,6 +350,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
         if endpoint["method"] == "GET" and "{" not in endpoint["path"]:
             query_params = get_query_params_schema(endpoint)
             required_params = [p for p in query_params if p["required"]]
+            expected_success_status = get_expected_success_status(endpoint) or 200
 
             if category_filter is None or constants.LIST_ENDPOINT in category_filter:
                 if required_params:
@@ -356,7 +364,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["test_type"] = "list_get"
                     result["category"] = constants.LIST_ENDPOINT
                     result["field"] = None
-                    result["expected_status"] = 200
+                    result["expected_status"] = expected_success_status
                     result["description"] = "Get list endpoint with required query params"
                     results.append(result)
 
@@ -428,7 +436,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["test_type"] = "list_get"
                     result["category"] = constants.LIST_ENDPOINT
                     result["field"] = None
-                    result["expected_status"] = 200
+                    result["expected_status"] = expected_success_status
                     result["description"] = "Get list endpoint (no filters)"
                     results.append(result)
                 for skipped in get_skipped_query_categories(query_params):
@@ -465,7 +473,10 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["test_type"] = "path_param"
                 result["category"] = case["category"]
                 result["field"] = None
-                result["expected_status"] = case["expected_status"]
+                if case["category"] == constants.VALID_ID:
+                    result["expected_status"] = get_expected_success_status(endpoint) or 200
+                else:
+                    result["expected_status"] == case["expected_status"]
                 result["description"] = case["description"] if value == case["value"] else f"{case['description']} (reall id = {value})"
                 results.append(result)
 
@@ -682,9 +693,9 @@ if __name__ == "__main__":
     init_db()
 
 
-    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["wrong_content_type"])
+    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["valid_id"])
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["ai_implicit_constraint_violation", "ai_implicit_constraint_valid", "ai_cross_field_violation"])
-    results, skipped = run_all_tests("http://127.0.0.1:8000")
+    #results, skipped = run_all_tests("http://127.0.0.1:8000")
     analysis = analyze_results(results)
     print_report(analysis)
     if skipped:

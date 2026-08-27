@@ -32,7 +32,7 @@ def extract_endpoints(spec: dict) -> list[dict]:
 
             if not isinstance(details, dict):
                 continue
-            
+
             operation_paramaters = details.get("parameters", [])
 
             merged_parameters = {(param.get("name"), param.get("in")): param for param in path_paramaters}
@@ -50,6 +50,24 @@ def extract_endpoints(spec: dict) -> list[dict]:
 
     return endpoints
 
+def get_expected_success_status(endpoint: dict) ->  int | None:
+    responses = endpoint.get("responses", {})
+
+    success_codes = []
+
+    for status_code in responses:
+        if not str(status_code).isdigit():
+            continue
+
+        code = int(status_code)
+
+        if 200<= code < 300:
+            success_codes.append(code)
+
+    if not success_codes:
+        return None
+
+    return min(success_codes)
 
 def resolve_schema_ref(spec: dict, ref: str) -> dict:
     #ref "#/components/schemas/Book"
