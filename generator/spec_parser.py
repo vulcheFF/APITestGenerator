@@ -12,12 +12,38 @@ def fetch_openapi_spec(base_url: str) -> dict:
 
 def extract_endpoints(spec: dict) -> list[dict]:
     endpoints = []
-    for path, methods in spec["paths"].items():
-        for method, details, in methods.items():
+
+    valid_methods = {
+        "get",
+        "post",
+        "put",
+        "delete",
+        "patch",
+        "head",
+        "options",
+        "trace",
+    }
+    for path, path_item in spec.get("paths", {}).items():
+        path_paramaters = path_item.get("parameters", [])
+
+        for method, details, in path_item.items():
+            if method.lower() not in valid_methods:
+                continue
+
+            if not isinstance(details, dict):
+                continue
+            
+            operation_paramaters = details.get("parameters", [])
+
+            merged_parameters = {(param.get("name"), param.get("in")): param for param in path_paramaters}
+
+            for param in operation_paramaters:
+                merged_parameters[(param.get("name"), param.get("in"))] = param
+
             endpoints.append({
                 "path": path,
                 "method": method.upper(),
-                "parameters": details.get("parameters",[]),
+                "parameters": list(merged_parameters.values()),
                 "request_body": details.get("requestBody",{}),
                 "responses": details.get("responses", {}),
             })
