@@ -104,6 +104,10 @@ def resolve_all_refs(spec: dict, schema: dict, _seen: set = None, _depth: int = 
     if "items" in result:
         result["items"] = resolve_all_refs(spec, result["items"], _seen, _depth + 1, _max_depth)
 
+    for keyword in ("oneOf", "anyOf", "allOf"):
+        if keyword in result and isinstance(result[keyword], list):
+            result[keyword] = [resolve_all_refs(spec, item, _seen = _seen.copy(), _depth = _depth+1, _max_depth = _max_depth) if isinstance(item, dict) else item for item in result[keyword]]
+
     return result
 
 
@@ -131,10 +135,10 @@ def get_response_schema(spec: dict, endpoint: dict, status_code: str) -> dict | 
     json_content = content.get("application/json", {})
     schema_ref = json_content.get("schema", {})
 
-    if "$ref" in schema_ref:
-        return resolve_schema_ref(spec, schema_ref["$ref"])
+    if not schema_ref:
+        return None
 
-    return schema_ref if schema_ref else None
+    return resolve_all_refs(spec, schema_ref)
 
 def get_path_param_schema(endpoint: dict) -> dict | None:
     for param in endpoint.get("parameters", []):

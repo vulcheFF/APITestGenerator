@@ -699,9 +699,9 @@ if __name__ == "__main__":
     init_db()
 
 
-    results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter="valid_data")
+    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter="valid_data")
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["ai_implicit_constraint_violation", "ai_implicit_constraint_valid", "ai_cross_field_violation"])
-    #results, skipped = run_all_tests("http://127.0.0.1:8000")
+    results, skipped = run_all_tests("http://127.0.0.1:8000")
     #results, skipped = run_all_tests("https://petstore3.swagger.io/api/v3", category_filter="valid_data")
     analysis = analyze_results(results)
     print_report(analysis)
