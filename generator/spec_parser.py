@@ -98,6 +98,9 @@ def resolve_all_refs(spec: dict, schema: dict, _seen: set = None, _depth: int = 
     if "items" in result:
         result["items"] = resolve_all_refs(spec, result["items"], _seen, _depth + 1, _max_depth)
 
+    if isinstance(result.get("additionalProperties"), dict):
+        result["additionalProperties"] = resolve_all_refs(spec, result["additionalProperties"], _seen=_seen.copy(),_depth = _depth+1, _max_depth = _max_depth )
+
     for keyword in ("oneOf", "anyOf", "allOf"):
         if keyword in result and isinstance(result[keyword], list):
             result[keyword] = [resolve_all_refs(spec, item, _seen = _seen.copy(), _depth = _depth+1, _max_depth = _max_depth) if isinstance(item, dict) else item for item in result[keyword]]
