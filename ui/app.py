@@ -115,6 +115,18 @@ class MainWindow(QMainWindow):
         self.passed_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.passed_table.setRowCount(0)
 
+        #skipped table
+        self.skipped_table = QTableWidget()
+        self.skipped_table.setColumnCount(4)
+        self.skipped_table.setHorizontalHeaderLabels([
+            "Method",
+            "Path",
+            "Category",
+            "Reason"
+        ])
+        self.skipped_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.skipped_table.setRowCount(0)
+
         #tabs
         self.result_tabs=QTabWidget()
         self.result_tabs.addTab(
@@ -124,6 +136,10 @@ class MainWindow(QMainWindow):
         self.result_tabs.addTab(
             self.passed_table,
             "Passed"
+        )
+        self.result_tabs.addTab(
+            self.skipped_table,
+            "Skipped"
         )
 
 
@@ -145,8 +161,10 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
     def handle_run_clicked(self):
+        self.current_issues = []
         self.issues_table.setRowCount(0)
         self.passed_table.setRowCount(0)
+        self.skipped_table.setRowCount(0)
         self.summary_label.setText("")
         self.issues_details.setText("")
 
@@ -186,6 +204,7 @@ class MainWindow(QMainWindow):
 
         self.populate_issues_table(analysis["issues"])
         self.populate_passed_table(analysis["passed"])
+        self.populate_skipped_table(run_data["skipped"])
 
         self.status_label.setText(f"Run #{run_data['run_id']} completed")
 
@@ -244,7 +263,7 @@ class MainWindow(QMainWindow):
             f"Method: {issue.get('method')}\n"
             f"Path: {issue.get('path')}\n"
             f"Category: {issue.get('category')}\n"
-            f"Field: {issue.get('field') or "N/A"}\n"
+            f"Field: {issue.get('field') or 'N/A'}\n"
             f"Expected status: {issue.get('expected_status')}\n"
             f"Actual code: {issue.get('status_code')}\n"
             f"Description: {issue.get('description', '')}"
@@ -270,6 +289,24 @@ class MainWindow(QMainWindow):
                 self.passed_table.setItem(row, column, QTableWidgetItem(text))
 
         self.passed_table.resizeColumnsToContents()
+
+    def populate_skipped_table(self, skipped):
+        self.skipped_table.setRowCount(len(skipped))
+
+        for row, item in enumerate(skipped):
+            values = [
+                item.get("method"),
+                item.get("path"),
+                item.get("category"),
+                item.get("reason"),
+            ]
+
+            for column, value in enumerate(values):
+                text = "" if value is None else str(value)
+
+                self.skipped_table.setItem(row, column, QTableWidgetItem(text))
+
+        self.skipped_table.resizeColumnsToContents()
 
 def main():
     app = QApplication(sys.argv)
