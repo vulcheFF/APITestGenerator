@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
                 issue.get("severity"),
                 issue.get("method"),
                 issue.get("path"),
-                issue.get("categoty"),
+                issue.get("category"),
                 issue.get("field"),
                 issue.get("expected_status"),
                 issue.get("status_code"),
