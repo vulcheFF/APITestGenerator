@@ -1,7 +1,7 @@
 import sys
 import random
 import time
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from analyzer.report import analyze_results
 from executor.pipeline import run_all_tests
@@ -39,7 +39,7 @@ class TestWorker(QObject):
                 "skipped": skipped,
                 "analysis": analysis,
             })
-        
+
         except Exception as exc:
             self.failed.emit(str(exc))
 
@@ -83,6 +83,12 @@ class MainWindow(QMainWindow):
 
         self.issues_table.setRowCount(0)
 
+        self.issues_details = QTextEdit()
+        self.issues_details.setReadOnly(True)
+        self.issues_details.setPlaceholderText("Select an issue to view details")
+        self.issues_details.setMaximumHeight(140)
+
+        self.issues_table.cellClicked.connect(self.handle_issue_selected)
 
         layout = QVBoxLayout()
         layout.addWidget(title)
@@ -91,6 +97,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.status_label)
         layout.addWidget(self.summary_label)
         layout.addWidget(self.issues_table)
+        layout.addWidget(self.issues_details)
         layout.addStretch()
 
         central_widget = QWidget()
@@ -100,6 +107,8 @@ class MainWindow(QMainWindow):
 
     def handle_run_clicked(self):
         self.issues_table.setRowCount(0)
+        self.issues_details.setText("")
+        
         base_url = self.base_url_input.text().strip().rstrip("/")
 
         if not base_url:
@@ -159,6 +168,8 @@ class MainWindow(QMainWindow):
         self.worker = None
 
     def populate_issues_table(self, issues):
+        self.current_issues = issues
+        self.issues_details.clear()
         self.issues_table.setRowCount(len(issues))
 
         for row, issue in enumerate(issues):
@@ -176,6 +187,28 @@ class MainWindow(QMainWindow):
                 self.issues_table.setItem(row, column, QTableWidgetItem(text),)
 
         self.issues_table.resizeColumnsToContents()
+
+    def handle_issue_selected(self, row, column):
+        if not hasattr(self, "current_issues"):
+            return
+        
+        if row<0 or row >= len(self.current_issues):
+            return
+
+        issue = self.current_issues[row]
+
+        details = (
+            f"Severity: {issue.get('severity')}\n"
+            f"Method: {issue.get('method')}\n"
+            f"Path: {issue.get('path')}\n"
+            f"Category: {issue.get('category')}\n"
+            f"Field: {issue.get('field') or "N/A"}\n"
+            f"Expected status: {issue.get('expected_status')}\n"
+            f"Actual code: {issue.get('status_code')}\n"
+            f"Description: {issue.get('description', '')}"
+        )
+
+        self.issues_details.setPlainText(details)
 
 def main():
     app = QApplication(sys.argv)
