@@ -31,7 +31,8 @@ def validate_response_against_schema(response_body, schema: dict) -> list[str]:
 
         return [f"Response matches {matched_count} schemas, but oneOf requires exactly one"]  
 
-
+    if "enum" in schema and response_body not in schema["enum"]:
+        errors.append(f"Value {response_body!r} is not one of the allowed enum values {schema['enum']}")
 
     schema_type = schema.get("type")
 
@@ -59,17 +60,58 @@ def validate_response_against_schema(response_body, schema: dict) -> list[str]:
     elif schema_type == "string":
         if not isinstance(response_body, str):
             errors.append(f"Expected string, got  {type(response_body).__name__}")
+        else:
+            min_length = schema.get("minLength")
+            if min_length is not None and len(response_body) < min_length:
+                errors.append(f"String length {len(response_body)} is below minLength {min_length}")
+
+            max_length = schema.get("maxLength")
+            if max_length is not None and len(response_body) > max_length:
+                errors.append(f"String length {len(response_body)} is above maxLength {max_length}")
 
     elif schema_type == "integer":
         if not isinstance(response_body, int) or isinstance(response_body, bool):
             errors.append(f"Expected integer, got {type(response_body).__name__}")
+        else:
+            minimum = schema.get("minimum")
+            if minimum is not None and response_body < minimum:
+                errors.append(f"Value {response_body} is below minimum {minimum}")
+
+            maximum = schema.get("maximum")
+            if maximum is not None and response_body > maximum:
+                errors.append(f"Value {response_body} is above maximum {maximum}")
+
+            exclusive_minimum  = schema.get("exclusiveMinimum")
+            if exclusive_minimum is not None and response_body <= exclusive_minimum:
+                errors.append(f"Value {response_body} must be greater than {exclusive_minimum}")
+
+            exclusive_maximum  = schema.get("exclusiveMaximum")
+            if exclusive_maximum is not None and response_body >= exclusive_maximum:
+                errors.append(f"Value {response_body} must be less than {exclusive_maximum}")
 
     elif schema_type == "number":
         if not isinstance(response_body, (int, float)) or isinstance(response_body, bool):
             errors.append(f"Expected number, got {type(response_body).__name__}")
+        else:
+            minimum = schema.get("minimum")
+            if minimum is not None and response_body < minimum:
+                errors.append(f"Value {response_body} is below minimum {minimum}")
+
+            maximum = schema.get("maximum")
+            if maximum is not None and response_body > maximum:
+                errors.append(f"Value {response_body} is above maximum {maximum}")
+
+            exclusive_minimum  = schema.get("exclusiveMinimum")
+            if exclusive_minimum is not None and response_body <= exclusive_minimum:
+                errors.append(f"Value {response_body} must be greater than {exclusive_minimum}")
+
+            exclusive_maximum  = schema.get("exclusiveMaximum")
+            if exclusive_maximum is not None and response_body >= exclusive_maximum:
+                errors.append(f"Value {response_body} must be less than {exclusive_maximum}")
 
     elif schema_type == "boolean":
         if not isinstance(response_body, bool):
             errors.append(f"Expected boolean, got {type(response_body).__name__}")
+
 
     return errors
