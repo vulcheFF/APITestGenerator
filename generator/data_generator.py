@@ -565,26 +565,27 @@ def get_skipped_categories(schema: dict) -> list[dict]:
             "reason": "No string field has 'pattern' in the schema"
         })
 
-    has_array_items_type = any(p.get("type")=="array" and p.get("items", {}).get("type") is not None for p in properties.values())
+    has_array_items_type = (schema.get("type")=="array" and schema.get("items", {}).get("type") is not None) or any(p.get("type")=="array" and p.get("items", {}).get("type") is not None for p in properties.values())
     if not has_array_items_type:
         skipped.append({
             "category": constants.INVALID_ARRAY_ITEM_TYPE,
             "reason": "No array field has 'items' with decalred type in the schema"
         })
 
-    has_array_bounds = any(p.get("type")=="array" and (p.get("minItems") is not None or p.get("maxItems") is not None) for p in properties.values())
+    has_array_bounds = (schema.get("type") == "array" and (schema.get("minItems") is not None or schema.get("maxItems") is not None)) or any(p.get("type")=="array" and (p.get("minItems") is not None or p.get("maxItems") is not None) for p in properties.values())
     if not has_array_bounds:
         skipped.append({
             "category": constants.ARRAY_BOUNDARY,
             "reason": "No array field has 'minItems' or 'maxItems' in the schema"
         })
-    has_unique_items = any(p.get("type") == "array" and p.get("uniqueItems") is True for p in properties.values())
+
+    has_unique_items = (schema.get("type") == "array" and schema.get("uniqueItems") is True) or any(p.get("type") == "array" and p.get("uniqueItems") is True for p in properties.values())
     if not has_unique_items:
         skipped.append({
             "category": constants.DUPLICATE_ARRAY_ITEMS,
             "reason": "No array field has 'uniqueItems' in the schema"
         })
-    has_array_without_minitems = any(p.get("type") == "array" and p.get("minItems") is None for p in properties.values())
+    has_array_without_minitems =(schema.get("type") == "array" and schema.get("minItems") is None) or  any(p.get("type") == "array" and p.get("minItems") is None for p in properties.values())
     if not has_array_without_minitems:
         skipped.append({
             "category": constants.EMPTY_ARRAY,
