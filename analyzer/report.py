@@ -58,7 +58,7 @@ def determine_severity(category: str) -> str:
 def is_acceptable_error_status(actual_status: int, expected_status: int) -> bool:
     if actual_status == expected_status:
         return True
-    if 400 <= actual_status < 500 and 400 <= actual_status <500:
+    if 400 <= actual_status < 500 and 400 <= expected_status <500:
         return True
 
     return False
