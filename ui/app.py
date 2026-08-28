@@ -1,7 +1,7 @@
 import sys
 import random
 import time
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from analyzer.report import analyze_results
 from executor.pipeline import run_all_tests
@@ -50,23 +50,27 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("API Test Generator")
         self.resize(900,600)
-         
+         #title
         title = QLabel("API Test Generator")
 
+        #url
         self.base_url_input = QLineEdit()
         self.base_url_input.setPlaceholderText("API base URL")
         self.base_url_input.setText("http://127.0.0.1:8000")
 
+        #button
         self.run_button = QPushButton("Run deterministic tests")
         self.run_button.clicked.connect(self.handle_run_clicked)
-        
+
+        #label
         self.status_label = QLabel("Ready!")
         self.summary_label = QLabel("No run yet!")
-        
 
+        #thread
         self.thread = None
         self.worker = None
 
+        #issue table
         self.issues_table = QTableWidget()
         self.issues_table.setColumnCount(7)
         self.issues_table.setHorizontalHeaderLabels([
@@ -78,28 +82,63 @@ class MainWindow(QMainWindow):
             "Expected",
             "Actual",
         ])
-
         self.issues_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-
         self.issues_table.setRowCount(0)
 
+        #issue details
         self.issues_details = QTextEdit()
         self.issues_details.setReadOnly(True)
         self.issues_details.setPlaceholderText("Select an issue to view details")
         self.issues_details.setMaximumHeight(140)
-
         self.issues_table.cellClicked.connect(self.handle_issue_selected)
 
+        #issue tab
+        issues_widget = QWidget()
+        issues_layout = QVBoxLayout()
+
+        issues_layout.addWidget(self.issues_table)
+        issues_layout.addWidget(self.issues_details)
+
+        issues_widget.setLayout(issues_layout)
+
+        #passed table
+        self.passed_table = QTableWidget()
+        self.passed_table.setColumnCount(5)
+        self.passed_table.setHorizontalHeaderLabels([
+            "Method",
+            "Path",
+            "Category",
+            "Field",
+            "Status",
+        ])
+
+        self.passed_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.passed_table.setRowCount(0)
+
+        #tabs
+        self.result_tabs=QTabWidget()
+        self.result_tabs.addTab(
+            issues_widget,
+            "Issues"
+        )
+        self.result_tabs.addTab(
+            self.passed_table,
+            "Passed"
+        )
+
+
+        #main layout
         layout = QVBoxLayout()
+
         layout.addWidget(title)
         layout.addWidget(self.base_url_input)
         layout.addWidget(self.run_button)
         layout.addWidget(self.status_label)
         layout.addWidget(self.summary_label)
-        layout.addWidget(self.issues_table)
-        layout.addWidget(self.issues_details)
-        layout.addStretch()
+        layout.addWidget(self.result_tabs)
+        #layout.addStretch()
 
+        #central
         central_widget = QWidget()
         central_widget.setLayout(layout)
 
@@ -107,8 +146,10 @@ class MainWindow(QMainWindow):
 
     def handle_run_clicked(self):
         self.issues_table.setRowCount(0)
+        self.passed_table.setRowCount(0)
+        self.summary_label.setText("")
         self.issues_details.setText("")
-        
+
         base_url = self.base_url_input.text().strip().rstrip("/")
 
         if not base_url:
@@ -144,6 +185,7 @@ class MainWindow(QMainWindow):
         analysis = run_data["analysis"]
 
         self.populate_issues_table(analysis["issues"])
+        self.populate_passed_table(analysis["passed"])
 
         self.status_label.setText(f"Run #{run_data['run_id']} completed")
 
@@ -209,6 +251,25 @@ class MainWindow(QMainWindow):
         )
 
         self.issues_details.setPlainText(details)
+
+    def populate_passed_table(self, passed):
+        self.passed_table.setRowCount(len(passed))
+
+        for row, result in enumerate(passed):
+            values = [
+                result.get("method"),
+                result.get("path"),
+                result.get("category"),
+                result.get("field"),
+                result.get("status_code"),
+            ]
+
+            for column, value in enumerate(values):
+                text = "" if value is None else str(value)
+
+                self.passed_table.setItem(row, column, QTableWidgetItem(text))
+
+        self.passed_table.resizeColumnsToContents()
 
 def main():
     app = QApplication(sys.argv)
