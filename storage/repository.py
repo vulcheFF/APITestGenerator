@@ -4,13 +4,17 @@ from storage.database import get_session, engine
 from storage.models import TestRun, TestResult, Issue
 from sqlmodel import Session, select
 
-def save_run(base_url: str, results: list[dict], analysis: dict) -> int:
+def save_run(base_url: str, results: list[dict], analysis: dict, *, seed: int| None = None, ai_enabled: bool | None = None, ai_model: str | None = None, duration_ms: int | None = None) -> int:
     with get_session() as session:
         run = TestRun(
             base_url=base_url,
             total_tests=analysis["total_tests"],
             passed_count=analysis["passed_count"],
             issues_found=analysis["issues_found"],
+            seed=seed,
+            ai_enabled=ai_enabled,
+            ai_model=ai_model,
+            duration_ms=duration_ms,
 
         )
         session.add(run)

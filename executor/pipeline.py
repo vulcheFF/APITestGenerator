@@ -17,7 +17,21 @@ from storage.repository import save_run
 from storage.database import init_db
 from generator.data_generator import generate_ai_constraint_cases, generate_cross_field_case
 from executor.state_helpers import fill_path_params_with_value, _is_id_like_name, find_id_like_field, create_resource_for_put_test, cleanup_created_resource, create_resource_for_stateful_test
+from ai.ollama_client import MODEL as AI_MODEL
 
+
+def is_ai_enabled_for_run(category_filter: list[str] | None) -> bool:
+    if category_filter is None:
+        return True
+
+    ai_categories = {
+        constants.AI_IMPLICIT_CONSTRAINT_VIOLATION,
+        constants.AI_IMPLICIT_CONSTRAINT_VALID,
+        constants.AI_CROSS_FIELD_VIOLATION,
+    }
+
+    return any(category in ai_categories for category in category_filter)
+    
 def get_default_path_value(param_schema: dict | None) -> str:
     param_type = (param_schema or {}).get("type", "integer")
     if param_type == "integer":
@@ -775,12 +789,28 @@ def cleanup_if_unexpectedly_succeeded(base_url: str, endpoints: list[dict], endp
 if __name__ == "__main__":
     init_db()
 
+    base_url = "http://127.0.0.1:8000"
+    category_filter = None
+
+    run_seed = random.SystemRandom().randint(0, 2**32 -1)
+
+    started_at = time.perf_counter()
+
+    results, skipped = run_all_tests(base_url, category_filter = category_filter, seed = run_seed)
+
+    duration_ms = round(time.perf_counter() - started_at) * 1000
+
 
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["valid_id","invalid_id_format","nonexistent_id","negative_id",])
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter= ["put_idempotency","delete_idempotency",])
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["list_endpoint","missing_required_query_param","invalid_query_param_enum","invalid_query_param_value",])
-    results, skipped = run_all_tests("http://127.0.0.1:8000")
-    #results, skipped = run_all_tests("https://petstore3.swagger.io/api/v3", category_filter="valid_data")
+    #results, skipped = run_all_tests("http://127.0.0.1:8000")
+    #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["ai_implicit_constraint_violation", "ai_implicit_constraint_valid", "ai_cross_field_violation"])
+    #results, skipped = run_all_tests("https://petstore3.swagger.io/api/v3", category_filter=["ai_implicit_constraint_violation", "ai_implicit_constraint_valid", "ai_cross_field_violation"])
+
+
+
+
     analysis = analyze_results(results)
     print_report(analysis)
     if skipped:
@@ -788,5 +818,12 @@ if __name__ == "__main__":
         for s in skipped:
             print(f"{s['method']} {s['path']} - {s['category']}: {s['reason']}")
 
-    run_id = save_run("http://127.0.0.1:8000", results, analysis)
+    ai_enabled = is_ai_enabled_for_run(category_filter)
+    run_id = save_run(base_url, results, analysis, seed = run_seed, ai_enabled=ai_enabled, ai_model=AI_MODEL if ai_enabled else None, duration_ms=duration_ms)
     print(f"\nSaved as run#{run_id}")
+    print(
+        f"Run metadata: seed = {run_seed}, "
+        f"AI = {'enabled' if ai_enabled else 'disabled'}, "
+        f"model = {AI_MODEL  if ai_enabled else 'N/A'}, "
+        f"duration={duration_ms} ms"
+    )

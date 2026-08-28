@@ -9,6 +9,10 @@ class TestRun(SQLModel, table = True):
     passed_count: int
     issues_found: int
     run_timestamp: datetime= Field(default_factory = datetime.now)
+    seed: Optional[int] = None
+    ai_enabled: Optional[bool] = None
+    ai_model: Optional[str] = None
+    duration_ms: Optional[int] = None
 
 
 class TestResult(SQLModel, table = True):
