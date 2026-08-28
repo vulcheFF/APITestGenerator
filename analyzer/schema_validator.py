@@ -4,13 +4,34 @@ def validate_response_against_schema(response_body, schema: dict) -> list[str]:
 
     errors = []
 
-    if "anyOf" in schema or "oneOf" in schema:
-        alternatives = schema.get("anyOf") or schema.get("oneOf")
+    if "anyOf" in schema:
+        alternatives = schema["anyOf"]
+
         for alt_schema in alternatives:
             alt_errors = validate_response_against_schema(response_body , alt_schema)
             if not alt_errors:
                 return []
-        return ["Response does not match any of the expected schemas (anyOf/oneOf)"]
+        return ["Response does not match any of the expected schemas (anyOf)"]
+
+    if "oneOf" in schema:
+        alternatives = schema["oneOf"]
+
+        matched_count = 0
+
+        for alt_schema in alternatives:
+            alt_errors = validate_response_against_schema(response_body , alt_schema)
+            if not alt_errors:
+                matched_count += 1
+
+        if matched_count == 1:
+            return []
+
+        if matched_count == 0:         
+            return ["Response does not match any of the expected schemas (oneOf)"]      
+
+        return [f"Response matches {matched_count} schemas, but oneOf requires exactly one"]  
+
+
 
     schema_type = schema.get("type")
 

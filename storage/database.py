@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, create_engine, Session
+from sqlmodel import SQLModel, create_engine, Session, inspect
 
 DATABASE_URL = "sqlite:///test_results.db"
 RUN_METADATA_COLUMNS = {
@@ -12,8 +12,13 @@ engine = create_engine(DATABASE_URL, echo=False) #не принтваме вся
 
 
 def _ensure_run_metadata_columns():
+
+    inspector = inspect(engine)
+    existing_columns = {
+        column["name"] for column in inspector.get_columns("testrun")
+    }
     with engine.begin() as connection:
-        existing_columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(test_run)").fetchall()}
+        #existing_columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(test_run)").fetchall()}
 
         for column_name, column_type in RUN_METADATA_COLUMNS.items():
             if column_name not in existing_columns:
