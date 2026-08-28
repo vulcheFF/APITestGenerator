@@ -8,14 +8,18 @@ from executor.pipeline import run_all_tests
 from generator import constants
 from storage.database import init_db
 from storage.repository import save_run
+from ai.ollama_client import MODEL as AI_MODEL
 
 class TestWorker(QObject):
     finished = Signal(object)
     failed = Signal(str)
 
-    def __init__(self,base_url:str):
+    def __init__(self,base_url:str, category_filter: list[str], ai_enabled: bool, ai_model: str | None = None):
         super().__init__()
         self.base_url = base_url
+        self.category_filter = category_filter
+        self.ai_enabled = ai_enabled
+        self.ai_model = ai_model
 
     @Slot()
     def run(self):
@@ -23,13 +27,13 @@ class TestWorker(QObject):
             run_seed = random.SystemRandom().randint(0, 2**32 - 1)
             started_at = time.perf_counter()
 
-            results, skipped = run_all_tests(self.base_url, category_filter=constants.DETERMINISTIC_CATEGORIES, seed=run_seed)
+            results, skipped = run_all_tests(self.base_url, category_filter=self.category_filter, seed=run_seed)
 
             duration_ms = round((time.perf_counter() - started_at)*1000)
 
             analysis = analyze_results(results)
 
-            run_id = save_run(self.base_url, results, analysis, seed = run_seed, ai_enabled=False, ai_model=None, duration_ms=duration_ms,)
+            run_id = save_run(self.base_url, results, analysis, seed = run_seed, ai_enabled=self.ai_enabled, ai_model= self.ai_model, duration_ms=duration_ms,)
 
             self.finished.emit({
                 "run_id": run_id,
@@ -61,6 +65,8 @@ class MainWindow(QMainWindow):
         #button
         self.run_button = QPushButton("Run deterministic tests")
         self.run_button.clicked.connect(self.handle_run_clicked)
+        self.ai_run_button = QPushButton("Run AI tests")
+        self.ai_run_button.clicked.connect(self.handle_ai_run_clicked)
 
         #label
         self.status_label = QLabel("Ready!")
@@ -149,6 +155,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(title)
         layout.addWidget(self.base_url_input)
         layout.addWidget(self.run_button)
+        layout.addWidget(self.ai_run_button)
         layout.addWidget(self.status_label)
         layout.addWidget(self.summary_label)
         layout.addWidget(self.result_tabs)
@@ -160,13 +167,8 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(central_widget)
 
-    def handle_run_clicked(self):
-        self.current_issues = []
-        self.issues_table.setRowCount(0)
-        self.passed_table.setRowCount(0)
-        self.skipped_table.setRowCount(0)
-        self.summary_label.setText("")
-        self.issues_details.setText("")
+
+    def start_test_run(self, category_filter, ai_enabled, ai_model = None):
 
         base_url = self.base_url_input.text().strip().rstrip("/")
 
@@ -174,12 +176,24 @@ class MainWindow(QMainWindow):
             self.status_label.setText("Please enter an API base URL!")
             return
 
+        
+        #deleting info 
+        self.current_issues = []
+        self.issues_table.setRowCount(0)
+        self.passed_table.setRowCount(0)
+        self.skipped_table.setRowCount(0)
+        self.summary_label.setText("")
+        self.issues_details.setText("")
+
+
+        #start
         self.run_button.setEnabled(False)
-        self.status_label.setText("Running deterministic tests...")
+        self.ai_run_button.setEnabled(False)
+        self.status_label.setText("Running tests...")
         self.summary_label.setText("")
 
         self.thread = QThread()
-        self.worker = TestWorker(base_url)
+        self.worker = TestWorker(base_url, category_filter=category_filter, ai_enabled=ai_enabled,ai_model=ai_model)
 
         self.worker.moveToThread(self.thread)
 
@@ -199,6 +213,14 @@ class MainWindow(QMainWindow):
 
         self.thread.start()
 
+
+
+    def handle_run_clicked(self):
+        self.start_test_run(category_filter=constants.DETERMINISTIC_CATEGORIES, ai_enabled=False, ai_model=None)
+
+    def handle_ai_run_clicked(self):
+        self.start_test_run(category_filter=constants.AI_CATEGORIES, ai_enabled=True, ai_model=AI_MODEL)
+
     def handle_run_finished(self, run_data):
         analysis = run_data["analysis"]
 
@@ -216,6 +238,7 @@ class MainWindow(QMainWindow):
         )
 
         self.run_button.setEnabled(True)
+        self.ai_run_button.setEnabled(True)
 
 
     def handle_run_failed(self, error_message):
@@ -223,6 +246,8 @@ class MainWindow(QMainWindow):
 
         self.summary_label.setText("")
         self.run_button.setEnabled(True)
+        self.ai_run_button.setEnabled(True)
+        
 
     def cleanup_thread(self):
         self.thread = None
