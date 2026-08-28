@@ -1,9 +1,8 @@
 import sys
 import random
 import time
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView
 from PySide6.QtCore import QObject, QThread, Signal, Slot
-
 from analyzer.report import analyze_results
 from executor.pipeline import run_all_tests
 from generator import constants
@@ -63,9 +62,27 @@ class MainWindow(QMainWindow):
         
         self.status_label = QLabel("Ready!")
         self.summary_label = QLabel("No run yet!")
+        
 
         self.thread = None
         self.worker = None
+
+        self.issues_table = QTableWidget()
+        self.issues_table.setColumnCount(7)
+        self.issues_table.setHorizontalHeaderLabels([
+            "Severity",
+            "Method",
+            "Path",
+            "Category",
+            "Field",
+            "Expected",
+            "Actual",
+        ])
+
+        self.issues_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+
+        self.issues_table.setRowCount(0)
+
 
         layout = QVBoxLayout()
         layout.addWidget(title)
@@ -73,6 +90,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.run_button)
         layout.addWidget(self.status_label)
         layout.addWidget(self.summary_label)
+        layout.addWidget(self.issues_table)
         layout.addStretch()
 
         central_widget = QWidget()
@@ -81,6 +99,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
     def handle_run_clicked(self):
+        self.issues_table.setRowCount(0)
         base_url = self.base_url_input.text().strip().rstrip("/")
 
         if not base_url:
@@ -115,6 +134,8 @@ class MainWindow(QMainWindow):
     def handle_run_finished(self, run_data):
         analysis = run_data["analysis"]
 
+        self.populate_issues_table(analysis["issues"])
+
         self.status_label.setText(f"Run #{run_data['run_id']} completed")
 
         self.summary_label.setText(
@@ -137,6 +158,24 @@ class MainWindow(QMainWindow):
         self.thread = None
         self.worker = None
 
+    def populate_issues_table(self, issues):
+        self.issues_table.setRowCount(len(issues))
+
+        for row, issue in enumerate(issues):
+            values = [
+                issue.get("severity"),
+                issue.get("method"),
+                issue.get("path"),
+                issue.get("categoty"),
+                issue.get("field"),
+                issue.get("expected_status"),
+                issue.get("status_code"),
+            ]
+            for column, value in enumerate(values):
+                text = "" if value is None else str(value)
+                self.issues_table.setItem(row, column, QTableWidgetItem(text),)
+
+        self.issues_table.resizeColumnsToContents()
 
 def main():
     app = QApplication(sys.argv)
