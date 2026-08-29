@@ -51,6 +51,10 @@ class MainWindow(QMainWindow):
         self.thread = None
         self.worker = None
 
+        #run id
+        self.run_a_id = None
+        self.run_b_id = None
+
         #issue table
         self.issues_table = QTableWidget()
         self.issues_table.setColumnCount(7)
@@ -183,7 +187,27 @@ class MainWindow(QMainWindow):
         font.setPointSize(font.pointSize() + 1)
         self.history_summary_label.setFont(font)
         self.history_summary_label.setStyleSheet("padding: 6px;")
+
+        self.run_a_label = QLabel("Run A: Not selected")
+        self.run_b_label = QLabel("Run B: Not selected")
+
+        self.set_run_a_button = QPushButton("Set as Run A")
+        self.set_run_b_button = QPushButton("Set as Run B")
+        self.compare_runs_button = QPushButton("Compare runs")
+
+
+        self.set_run_a_button.clicked.connect(self.handle_set_run_a)
+        self.set_run_b_button.clicked.connect(self.handle_set_run_b)
+        self.compare_runs_button.clicked.connect(self.handle_compare_runs)
+
         history_layout.addWidget(self.history_summary_label)
+
+        history_layout.addWidget(self.run_a_label)
+        history_layout.addWidget(self.run_b_label)
+        history_layout.addWidget(self.set_run_a_button)
+        history_layout.addWidget(self.set_run_b_button)
+        history_layout.addWidget(self.compare_runs_button)
+
         history_layout.addWidget(self.history_table)
         
 
@@ -448,14 +472,16 @@ class MainWindow(QMainWindow):
         self.history_table.resizeColumnsToContents()
 
     def handle_history_run_opened(self, row, column):
-        run_id_item = self.history_table.item(row, 0)
+        run_id = self.get_selected_history_run_id()
 
-        if run_id_item is None:
+        if run_id is None:
             return
 
-        try:
-            run_id = int(run_id_item.text())
-        except ValueError:
+
+        run_summary = get_run_summary(run_id)
+        run = run_summary["run"]
+
+        if run is None:
             return
 
         run_summary = get_run_summary(run_id)
@@ -495,15 +521,11 @@ class MainWindow(QMainWindow):
         self.main_tabs.setCurrentIndex(0)
 
     def handle_history_run_selected(self, row, column):
-        run_id_item = self.history_table.item(row, 0)
+        run_id = self.get_selected_history_run_id()
 
-        if run_id_item is None:
+        if run_id is None:
             return
 
-        try:
-            run_id = int(run_id_item.text())
-        except ValueError:
-            return
 
         run_summary = get_run_summary(run_id)
         run = run_summary["run"]
@@ -546,6 +568,59 @@ class MainWindow(QMainWindow):
             "description": result.description,
         }
 
+    def get_selected_history_run_id(self):
+        row = self.history_table.currentRow()
+
+        if row < 0:
+            return None
+
+        run_id_item = self.history_table.item(row, 0)
+
+        if run_id_item is None:
+            return None
+
+        try:
+            return int(run_id_item.text())
+        except ValueError:
+            return None
+
+    def handle_set_run_a(self):
+        run_id = self.get_selected_history_run_id()
+
+        if run_id is None:
+            self.history_summary_label.setText("Select a history run first.")
+            return
+
+        self.run_a_id = run_id
+        self.run_a_label.setText(f"Run A: #{run_id}")
+
+    def handle_set_run_b(self):
+        run_id = self.get_selected_history_run_id()
+
+        if run_id is None:
+            self.history_summary_label.setText("Select a history run first.")
+            return
+
+        self.run_b_id = run_id
+        self.run_b_label.setText(f"Run B: #{run_id}")
+        
+    def handle_compare_runs(self):
+        if self.run_a_id is None:
+            self.history_summary_label.setText("Select Run A before comparing.")
+            return
+        if self.run_b_id is None:
+            self.history_summary_label.setText("Select Run B before comparing.")
+            return
+
+        if self.run_a_id  == self.run_b_id:
+            self.history_summary_label.setText("Run A and Run B must be different.")
+            return
+        
+        self.history_summary_label.setText(
+            f"Ready to compare Run #{self.run_a_id} "
+            f"with Run #{self.run_b_id}."
+        )
+        
 def main():
     app = QApplication(sys.argv)
 
