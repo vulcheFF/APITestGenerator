@@ -1,13 +1,9 @@
 import sys
-import random
-import time
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget, QDialog
-from PySide6.QtCore import QObject, QThread, Signal, Slot
-from analyzer.report import analyze_results
-from executor.pipeline import run_all_tests
+from PySide6.QtCore import QThread
 from generator import constants
 from storage.database import init_db
-from storage.repository import save_run
+from storage.repository import get_recent_runs, get_run_summary
 from ai.ollama_client import MODEL as AI_MODEL
 from ui.workers import TestWorker
 from ui.dialogs import CategorySelectionDialog
@@ -68,6 +64,9 @@ class MainWindow(QMainWindow):
             "Actual",
         ])
         self.issues_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.issues_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.issues_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.issues_table.setAlternatingRowColors(True)
         self.issues_table.setRowCount(0)
 
         #issue details
@@ -98,6 +97,9 @@ class MainWindow(QMainWindow):
         ])
 
         self.passed_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.passed_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.passed_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.passed_table.setAlternatingRowColors(True)
         self.passed_table.setRowCount(0)
 
         #skipped table
@@ -110,6 +112,9 @@ class MainWindow(QMainWindow):
             "Reason"
         ])
         self.skipped_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.skipped_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.skipped_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.skipped_table.setAlternatingRowColors(True)
         self.skipped_table.setRowCount(0)
 
         #tabs
@@ -127,30 +132,79 @@ class MainWindow(QMainWindow):
             "Skipped"
         )
 
+        #testing tab
+        testing_widget = QWidget()
+        testing_layout = QVBoxLayout()
 
+        testing_layout.addWidget(self.base_url_input)
+        testing_layout.addWidget(self.selected_deterministic_button)
+        testing_layout.addWidget(self.deterministic_selection_label)
+        testing_layout.addWidget(self.run_button)
+        testing_layout.addWidget(self.selected_ai_button)
+        testing_layout.addWidget(self.ai_selection_label)
+        testing_layout.addWidget(self.ai_run_button)
+        testing_layout.addWidget(self.status_label)
+        testing_layout.addWidget(self.summary_label)
+        testing_layout.addWidget(self.run_type_label)
+        testing_layout.addWidget(self.result_tabs)
+        testing_widget.setLayout(testing_layout)
+
+
+
+        #history table
+        self.history_table = QTableWidget()
+        self.history_table.setColumnCount(8)
+        self.history_table.setHorizontalHeaderLabels([
+            "Run ID",
+            "Timestamp",
+            "Type",
+            "Base URL",
+            "Total",
+            "Passed",
+            "Issues",
+            "Duration"
+        ])
+
+        self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.history_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.history_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.history_table.setAlternatingRowColors(True)
+        self.history_table.cellClicked.connect(self.handle_history_run_selected)
+        self.history_table.cellDoubleClicked.connect(self.handle_history_run_opened)
+        self.history_table.setRowCount(0)
+
+        #history tab
+        history_widget = QWidget()
+        history_layout = QVBoxLayout()
+
+        self.history_summary_label = QLabel("Select a run to view details")
+        font = self.history_summary_label.font()
+        font.setBold(True)
+        font.setPointSize(font.pointSize() + 1)
+        self.history_summary_label.setFont(font)
+        self.history_summary_label.setStyleSheet("padding: 6px;")
+        history_layout.addWidget(self.history_summary_label)
+        history_layout.addWidget(self.history_table)
+        
+
+        history_widget.setLayout(history_layout)
+
+        #main tabs
+
+        self.main_tabs = QTabWidget()
+        self.main_tabs.addTab(testing_widget, "Testing")
+        self.main_tabs.addTab(history_widget, "History")
+        
         #main layout
         layout = QVBoxLayout()
-
         layout.addWidget(title)
-        layout.addWidget(self.base_url_input)
-        layout.addWidget(self.selected_deterministic_button)
-        layout.addWidget(self.deterministic_selection_label)
-        layout.addWidget(self.run_button)
-        layout.addWidget(self.selected_ai_button)
-        layout.addWidget(self.ai_selection_label)
-        layout.addWidget(self.ai_run_button)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.summary_label)
-        layout.addWidget(self.run_type_label)
-        layout.addWidget(self.result_tabs)
-        
-        #layout.addStretch()
-
+        layout.addWidget(self.main_tabs)
         #central
         central_widget = QWidget()
         central_widget.setLayout(layout)
 
         self.setCentralWidget(central_widget)
+        self.populate_history_table()
 
 
     def start_test_run(self, category_filter, ai_enabled, ai_model = None):
@@ -192,8 +246,7 @@ class MainWindow(QMainWindow):
 
 
         #start
-        self.run_button.setEnabled(False)
-        self.ai_run_button.setEnabled(False)
+
         self.status_label.setText("Running tests...")
         self.summary_label.setText("")
 
@@ -249,6 +302,8 @@ class MainWindow(QMainWindow):
             f"Issues: {analysis['issues_found']} | "
             f"Duration: {run_data['duration_ms']} ms"
         )
+
+        self.populate_history_table()
 
         self.run_button.setEnabled(True)
         self.ai_run_button.setEnabled(True)
@@ -356,7 +411,7 @@ class MainWindow(QMainWindow):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.selected_deterministic_categories = (dialog.get_selected_categories())
 
-            self.deterministic_selection_label.setText(f"{len(self.selected_deterministic_categories)} selected")
+            self.deterministic_selection_label.setText(f"{len(self.selected_deterministic_categories)} categories selected")
 
     def handle_select_ai_tests(self):
         dialog = CategorySelectionDialog(categories=constants.AI_CATEGORIES, selected_categories=self.selected_ai_categories, parent=self)
@@ -364,7 +419,132 @@ class MainWindow(QMainWindow):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.selected_ai_categories = (dialog.get_selected_categories())
 
-            self.ai_selection_label.setText(f"{len(self.selected_ai_categories)} selected")
+            self.ai_selection_label.setText(f"{len(self.selected_ai_categories)} categories selected")
+
+    def populate_history_table(self):
+        runs = get_recent_runs(limit=20)
+
+        self.history_table.setRowCount(len(runs))
+
+        for row, run in enumerate(runs):
+            run_type = "AI" if run.ai_enabled else "Deterministic"
+
+            values = [
+                run.id,
+                run.run_timestamp,
+                run_type,
+                run.base_url,
+                run.total_tests,
+                run.passed_count,
+                run.issues_found,
+                run.duration_ms,
+            ]
+
+            for column, value in enumerate(values):
+                text = "" if value is None else str(value)
+
+                self.history_table.setItem(row,column, QTableWidgetItem(text))
+
+        self.history_table.resizeColumnsToContents()
+
+    def handle_history_run_opened(self, row, column):
+        run_id_item = self.history_table.item(row, 0)
+
+        if run_id_item is None:
+            return
+
+        try:
+            run_id = int(run_id_item.text())
+        except ValueError:
+            return
+
+        run_summary = get_run_summary(run_id)
+        run = run_summary["run"]
+
+        if run is None:
+            return
+
+        duration = (f"{run.duration_ms} ms" if run.duration_ms is not None else "N/A")
+
+        historical_issues = [self.history_issue_to_dict(issue) for issue in run_summary["issues"]]
+        historical_passed = [self.history_result_to_dict(result) for result in run_summary["passed"]]
+
+        self.populate_issues_table(historical_issues)
+        self.populate_passed_table(historical_passed)
+
+        self.populate_skipped_table([])
+
+        self.status_label.setText(f"Viewing historical run #{run.id}")
+
+        self.summary_label.setText(
+            f"Total: {run.total_tests} |"
+            f"Passed: {run.passed_count} |"
+            f"Issues: {run.issues_found} |"
+            f"Duration: {duration}"
+        )
+
+        if run.ai_enabled:
+            self.run_type_label.setText(f" Historical AI-Assited run #{run.id} - heuristic findings")
+            self.result_tabs.setTabText(0, "AI Issues")
+            self.result_tabs.setTabText(1, "AI Passed")
+        else:
+            self.run_type_label.setText(f" Historical deterministic run #{run.id}")
+            self.result_tabs.setTabText(0, "Issues")
+            self.result_tabs.setTabText(1, "Passed")
+
+        self.main_tabs.setCurrentIndex(0)
+
+    def handle_history_run_selected(self, row, column):
+        run_id_item = self.history_table.item(row, 0)
+
+        if run_id_item is None:
+            return
+
+        try:
+            run_id = int(run_id_item.text())
+        except ValueError:
+            return
+
+        run_summary = get_run_summary(run_id)
+        run = run_summary["run"]
+
+        if run is None:
+            return
+
+        run_type = "AI" if run.ai_enabled else "Deterministic"
+
+        duration = (f"{run.duration_ms} ms" if run.duration_ms is not None else "N/A")
+
+        self.history_summary_label.setText(
+            f"Run #{run.id} | "
+            f"{run_type} | "
+            f"Total: {run.total_tests} | "
+            f"Passed: {run.passed_count} | "
+            f"Issues: {run.issues_found} | "
+            f"Duration: {duration}"
+        )
+
+
+    def history_issue_to_dict(self, issue):
+        return{
+            "severity": issue.severity,
+            "method": issue.method,
+            "path": issue.path,
+            "category": issue.category,
+            "field": issue.field,
+            "expected_status": issue.expected_status,
+            "status_code": issue.status_code,
+            "description": issue.description,
+        }
+    def history_result_to_dict(self, result):
+        return {
+            "method": result.method,
+            "path": result.path,
+            "category": result.category,
+            "field": result.field,
+            "status_code": result.status_code,
+            "description": result.description,
+        }
 
 def main():
     app = QApplication(sys.argv)
