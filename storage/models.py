@@ -20,6 +20,7 @@ class TestResult(SQLModel, table = True):
     run_id: int = Field(foreign_key="testrun.id")
     method: str
     path: str
+    template_path: Optional[str] = None
     test_type: str
     category: Optional[str] = None
     field: Optional[str] = None
@@ -35,6 +36,7 @@ class Issue(SQLModel, table = True):
     run_id: int = Field(foreign_key="testrun.id")
     method: str
     path: str
+    template_path: Optional[str] = None
     category: Optional[str] = None
     field: Optional[str] = None
     expected_status: Optional[int] = None

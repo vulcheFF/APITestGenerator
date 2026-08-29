@@ -153,6 +153,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         result = execute_test(base_url, endpoint["method"], setup["path"], valid_data)
                         cleanup_created_resource(base_url, endpoints, setup["resource_path"], setup["id"])
                         result = attach_schema_conformance(result, spec, endpoint)
+                        result = attach_template_path(result, endpoint)
                         result["test_type"] = "valid"
                         result["category"] = constants.VALID_DATA
                         result["field"] = None
@@ -170,6 +171,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     if id_field and isinstance(response_body, dict) and id_field in response_body:
                         cleanup_created_resource(base_url, endpoints, endpoint["path"], response_body[id_field])              
                     result = attach_schema_conformance(result, spec, endpoint)
+                    result = attach_template_path(result, endpoint)
                     result["test_type"] = "valid"
                     result["category"] = constants.VALID_DATA
                     result["field"] = None
@@ -212,6 +214,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                             cleanup_created_resource(base_url,endpoints,invalid_put_setup["resource_path"],mutated_id,)
                     
                 result = attach_schema_conformance(result, spec, endpoint)
+                result = attach_template_path(result, endpoint)
                 result["test_type"] = "invalid"
                 result["category"] = case["category"]
                 result["field"] = case["field"]
@@ -225,6 +228,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
             if mass_assignment_case and (category_filter is None or constants.MASS_ASSIGNMENT in category_filter):
                 result = execute_test(base_url, endpoint["method"], filled_path, mass_assignment_case["data"])
                 result = attach_schema_conformance(result, spec, endpoint)
+                result = attach_template_path(result, endpoint)
                 result["test_type"] = "invalid"
                 result["category"] = mass_assignment_case["category"]
                 result["field"] = mass_assignment_case["field"]
@@ -258,6 +262,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
 
                     result = attach_schema_conformance(result, spec, endpoint)
+                    result = attach_template_path(result, endpoint)
                     if ai_case["category"] == constants.AI_IMPLICIT_CONSTRAINT_VALID:
                         success_codes = get_success_status_codes(endpoint)
 
@@ -311,6 +316,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
                     #result = execute_test(base_url, endpoint["method"], ai_test_path, cross_case["data"])
                     result = attach_schema_conformance(result, spec, endpoint)
+                    result = attach_template_path(result, endpoint)
                     result["test_type"] = "invalid"
                     result["category"] = cross_case["category"]
                     result["field"] = cross_case["field"]
@@ -340,6 +346,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["field"] = None
                     result["expected_status"] = 400
                     result["description"] = case["description"]
+                    result["template_path"] = endpoint["path"]
                     results.append(result)     
             if category_filter is  None or constants.WRONG_CONTENT_TYPE in category_filter:
                 valid_data_for_ct_test = generate_valid_object(schema)
@@ -365,6 +372,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["field"] = None
                 result["expected_status"] = 415
                 result["description"] = f"Valid JSON body with wrong Content-Type (text/plain) (Accept-Post header present: {has_accept_post_header})"
+                result["template_path"] = endpoint["path"]
                 results.append(result)
 
             for skipped in get_skipped_categories(schema):
@@ -393,6 +401,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     test_path = endpoint["path"] + build_query_string(valid_query)
                     result = execute_test(base_url, endpoint["method"], test_path, data=None)
                     result = attach_schema_conformance(result, spec, endpoint)
+                    result = attach_template_path(result, endpoint)
                     result["test_type"] = "list_get"
                     result["category"] = constants.LIST_ENDPOINT
                     result["field"] = None
@@ -409,6 +418,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         test_path = endpoint["path"] + build_query_string(partial_query)
                         result = execute_test(base_url, endpoint["method"], test_path, data = None)
                         result = attach_schema_conformance(result, spec, endpoint)
+                        result = attach_template_path(result, endpoint)
                         result["test_type"] = "list_get"
                         result["category"] = constants.MISSING_REQUIRED_QUERY_PARAM
                         result["field"] = missing_param["name"]
@@ -436,6 +446,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         test_path = endpoint["path"] + build_query_string(invalid_query)
                         result = execute_test(base_url, endpoint["method"], test_path, data = None)
                         result = attach_schema_conformance(result, spec, endpoint)
+                        result = attach_template_path(result, endpoint)
                         result["test_type"] = "list_get"
                         result["category"] = constants.INVALID_QUERY_PARAM_VALUE
                         result["field"] = target_param["name"]
@@ -456,6 +467,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         test_path = endpoint["path"] + build_query_string(invalid_query)
                         result = execute_test(base_url, endpoint["method"], test_path, data = None)
                         result = attach_schema_conformance(result, spec, endpoint)
+                        result = attach_template_path(result, endpoint)
                         result["test_type"] = "list_get"
                         result["category"] = constants.INVALID_QUERY_PARAM_ENUM
                         result["field"] = enum_param["name"]
@@ -466,6 +478,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     #no req params
                     result = execute_test(base_url, endpoint["method"], endpoint["path"], data=None)
                     result = attach_schema_conformance(result, spec, endpoint)
+                    result = attach_template_path(result, endpoint)
                     result["test_type"] = "list_get"
                     result["category"] = constants.LIST_ENDPOINT
                     result["field"] = None
@@ -514,6 +527,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         if status is None or not(200<=status<300):
                             cleanup_created_resource(base_url, endpoints, delete_setup["resource_path"], delete_setup["id"])
                     result = attach_schema_conformance(result, spec, endpoint)
+                    result = attach_template_path(result, endpoint)
                     result["test_type"] = "path_param"
                     result["category"] = case["category"]
                     result["field"] = None
@@ -550,7 +564,8 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
                         test_path = fill_path_params_with_values(endpoint["path"],values)
                         result = execute_test(base_url, endpoint["method"], test_path, data=None)
-                        result = attach_schema_conformance(result,spec,endpoint)
+                        result = attach_schema_conformance(result, spec, endpoint)
+                        result = attach_template_path(result, endpoint)
                         result["test_type"] = "path_param"
                         result["category"] = case["category"]
                         result["field"] = target_name
@@ -586,6 +601,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
             result["field"] = None
             result["expected_status"] = 405
             result["description"] = f"Undeclared method '{undeclared_methods}' on path (Allow header present: {has_allow_header})"
+            result["template_path"] = path
             results.append(result)
 
     if category_filter is None or constants.DELETE_IDEMPOTENCY in category_filter:
@@ -634,6 +650,7 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
             "test_type": "sequence",
             "method": "DELETE",
             "path": delete_endpoint["path"],
+            "template_path": delete_endpoint["path"],
             "response_body": create_result.get("response_body"),
             "error": "Setup failed",
         }
@@ -651,7 +668,7 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
     second_delete["expected_status"] = 404
     second_delete["test_type"] = "sequence"
     second_delete["description"] = (        f"Second DELETE on same result (id={create_id}) after successful first DELETE (first delete status:{first_delete['status_code']})")
-
+    second_delete["template_path"] = delete_endpoint["path"]
     return second_delete
 
 
@@ -691,6 +708,7 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
             "test_type": "sequence",
             "method": "PUT",
             "path": put_endpoint["path"],
+            "template_path": put_endpoint["path"],
             "response_body": create_result.get("response_body"),
             "error": "Setup failed",
         }  
@@ -724,6 +742,7 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
     if created_id is not None:
         resource_path = re.sub(r"/\{[^}]+\}$","",put_endpoint["path"])
         cleanup_created_resource(base_url, endpoints, resource_path, created_id)
+    second_put["template_path"] = put_endpoint["path"]
     return second_put
 
 
@@ -785,6 +804,10 @@ def cleanup_if_unexpectedly_succeeded(base_url: str, endpoints: list[dict], endp
         execute_test(base_url, "DELETE", cleanup_path, data=None)
     except:
         pass
+
+def attach_template_path(result: dict, endpoint: dict) -> dict:
+    result["template_path"] = endpoint["path"]
+    return result
 
 if __name__ == "__main__":
     init_db()

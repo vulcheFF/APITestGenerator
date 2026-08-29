@@ -106,6 +106,7 @@ def analyze_results(results: list[dict])-> dict:
             passed.append({
                 "method": r["method"],
                 "path": r["path"],
+                "template_path": r.get("template_path"),
                 "category": r.get("category"),
                 "field": r.get("field"),
                 "description": r["description"],                
@@ -118,6 +119,7 @@ def analyze_results(results: list[dict])-> dict:
             issues.append({
                 "method": r["method"],
                 "path": r["path"],
+                "template_path": r.get("template_path"),
                 "category": r.get("category"),
                 "field": r.get("field"),
                 "description": f"Request failed: {r['error']}",
@@ -130,6 +132,7 @@ def analyze_results(results: list[dict])-> dict:
             issues.append({
                 "method": r["method"],
                 "path": r["path"],
+                "template_path": r.get("template_path"),
                 "category": r.get("category"),
                 "field": r.get("field"),
                 "description": r["description"],
@@ -143,6 +146,7 @@ def analyze_results(results: list[dict])-> dict:
             issues.append({
                 "method": r["method"],
                 "path": r["path"],
+                "template_path": r.get("template_path"),
                 "category": constants.RESPONSE_SCHEMA_MISMATCH,
                 "field": r.get("field"),
                 "description": f"{r["description"]} - response body does not comply with the daclared schema {'; '.join(conformance_errors)}",

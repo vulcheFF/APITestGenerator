@@ -8,8 +8,26 @@ RUN_METADATA_COLUMNS = {
     "duration_ms": "INTEGER",
 }
 
+RESULT_METADATA_COLUMNS = {"template_path": "VARCHAR"}
+
+ISSUE_METADATA_COLUMNS = {"template_path": "VARCHAR"}
+
 engine = create_engine(DATABASE_URL, echo=False) #не принтваме всяка сял заявка, при тру принтим
 
+
+
+def _ensure_table_columns(table_name: str, columns: dict[str,str]):
+    inspector = inspect(engine)
+
+    existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+
+    with engine.begin() as connection:
+        for column_name, column_type in columns.items():
+            if column_name not in existing_columns:
+                connection.exec_driver_sql(
+                    f"ALTER TABLE {table_name} "
+                    f"ADD COLUMN {column_name} {column_type}"
+                )
 
 def _ensure_run_metadata_columns():
 
@@ -32,6 +50,8 @@ def init_db():
     SQLModel.metadata.create_all(engine)
     _ensure_run_metadata_columns()
 
+    _ensure_table_columns("testresult", RESULT_METADATA_COLUMNS)
+    _ensure_table_columns("issue", ISSUE_METADATA_COLUMNS)
 def get_session():
     return Session(engine)
 

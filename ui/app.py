@@ -7,6 +7,7 @@ from storage.repository import get_recent_runs, get_run_summary
 from ai.ollama_client import MODEL as AI_MODEL
 from ui.workers import TestWorker
 from ui.dialogs import CategorySelectionDialog
+from analyzer.run_comparison import compare_run_issues
 
 
 class MainWindow(QMainWindow):
@@ -552,6 +553,7 @@ class MainWindow(QMainWindow):
             "severity": issue.severity,
             "method": issue.method,
             "path": issue.path,
+            "template_path": issue.template_path,
             "category": issue.category,
             "field": issue.field,
             "expected_status": issue.expected_status,
@@ -562,6 +564,7 @@ class MainWindow(QMainWindow):
         return {
             "method": result.method,
             "path": result.path,
+            "template_path": result.template_path,
             "category": result.category,
             "field": result.field,
             "status_code": result.status_code,
@@ -620,6 +623,38 @@ class MainWindow(QMainWindow):
             f"Ready to compare Run #{self.run_a_id} "
             f"with Run #{self.run_b_id}."
         )
+
+        issues_a = self.get_historical_run_issues(self.run_a_id)
+        issues_b = self.get_historical_run_issues(self.run_b_id)
+
+        if issues_a is None or issues_b is None:
+            self.history_summary_label.setText("One of the selected runs no longer exists")
+            return
+        comparison = compare_run_issues(issues_a, issues_b)
+
+        print("Run A:", self.run_a_id)
+        print("Run B:", self.run_b_id)
+        print("New:", len(comparison["new"]))
+        print("Resolved:", len(comparison["resolved"]))
+        print("Unchanged:", len(comparison["unchanged"]))
+
+        self.history_summary_label.setText(
+            f"Run #{self.run_a_id} vs Run #{self.run_b_id} | "
+            f"New: {len(comparison['new'])} | "
+            f"Resolved: {len(comparison["resolved"])} | "
+            f"Unchanged: {len(comparison["unchanged"])}"
+        )
+
+    def get_historical_run_issues(self, run_id):
+        run_summary = get_run_summary(run_id)
+        run = run_summary["run"]
+
+        if run is None:
+            return None
+
+        return [self.history_issue_to_dict(issue) for issue in run_summary["issues"]]
+
+    
         
 def main():
     app = QApplication(sys.argv)
