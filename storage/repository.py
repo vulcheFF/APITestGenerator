@@ -75,3 +75,9 @@ def get_run_summary(run_id: int):
             "failed":[r for r in all_results if not r.passed],
             "issues": issues,
         }
+
+def get_recent_runs(limit: int = 20):
+    with Session(engine) as session:
+        statement = (select(TestRun).order_by(TestRun.id.desc()).limit(limit))
+
+        return session.exec(statement).all()

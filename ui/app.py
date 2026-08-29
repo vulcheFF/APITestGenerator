@@ -1,7 +1,7 @@
 import sys
 import random
 import time
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget, QDialog
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from analyzer.report import analyze_results
 from executor.pipeline import run_all_tests
@@ -9,43 +9,9 @@ from generator import constants
 from storage.database import init_db
 from storage.repository import save_run
 from ai.ollama_client import MODEL as AI_MODEL
+from ui.workers import TestWorker
+from ui.dialogs import CategorySelectionDialog
 
-class TestWorker(QObject):
-    finished = Signal(object)
-    failed = Signal(str)
-
-    def __init__(self,base_url:str, category_filter: list[str], ai_enabled: bool, ai_model: str | None = None):
-        super().__init__()
-        self.base_url = base_url
-        self.category_filter = category_filter
-        self.ai_enabled = ai_enabled
-        self.ai_model = ai_model
-
-    @Slot()
-    def run(self):
-        try:
-            run_seed = random.SystemRandom().randint(0, 2**32 - 1)
-            started_at = time.perf_counter()
-
-            results, skipped = run_all_tests(self.base_url, category_filter=self.category_filter, seed=run_seed)
-
-            duration_ms = round((time.perf_counter() - started_at)*1000)
-
-            analysis = analyze_results(results)
-
-            run_id = save_run(self.base_url, results, analysis, seed = run_seed, ai_enabled=self.ai_enabled, ai_model= self.ai_model, duration_ms=duration_ms,)
-
-            self.finished.emit({
-                "run_id": run_id,
-                "seed": run_seed,
-                "duration_ms": duration_ms,
-                "results": results,
-                "skipped": skipped,
-                "analysis": analysis,
-            })
-
-        except Exception as exc:
-            self.failed.emit(str(exc))
 
 class MainWindow(QMainWindow):
 
@@ -62,16 +28,28 @@ class MainWindow(QMainWindow):
         self.base_url_input.setPlaceholderText("API base URL")
         self.base_url_input.setText("http://127.0.0.1:8000")
 
-        #button
+
+        self.selected_deterministic_categories = list(constants.DETERMINISTIC_CATEGORIES)
+        self.selected_ai_categories = list(constants.AI_CATEGORIES)
+
+        #buttons
         self.run_button = QPushButton("Run deterministic tests")
         self.run_button.clicked.connect(self.handle_run_clicked)
         self.ai_run_button = QPushButton("Run AI tests")
         self.ai_run_button.clicked.connect(self.handle_ai_run_clicked)
 
+        self.selected_deterministic_button = QPushButton("Select deterministic test categories...")
+        self.selected_deterministic_button.clicked.connect(self.handle_select_deterministic_tests)
+
+        self.selected_ai_button = QPushButton("Select AI test categories...")
+        self.selected_ai_button.clicked.connect(self.handle_select_ai_tests)
+
         #label
         self.status_label = QLabel("Ready!")
         self.summary_label = QLabel("No run yet!")
         self.run_type_label = QLabel("")
+        self.deterministic_selection_label = QLabel(f"{len(self.selected_deterministic_categories)} categories selected")
+        self.ai_selection_label = QLabel(f"{len(self.selected_ai_categories)} categories selected")
 
         #thread
         self.thread = None
@@ -155,7 +133,11 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(title)
         layout.addWidget(self.base_url_input)
+        layout.addWidget(self.selected_deterministic_button)
+        layout.addWidget(self.deterministic_selection_label)
         layout.addWidget(self.run_button)
+        layout.addWidget(self.selected_ai_button)
+        layout.addWidget(self.ai_selection_label)
         layout.addWidget(self.ai_run_button)
         layout.addWidget(self.status_label)
         layout.addWidget(self.summary_label)
@@ -180,18 +162,22 @@ class MainWindow(QMainWindow):
             self.status_label.setText("Please enter an API base URL!")
             return
 
+        self.run_button.setEnabled(False)
+        self.ai_run_button.setEnabled(False)
+        self.selected_deterministic_button.setEnabled(False)
+        self.selected_ai_button.setEnabled(False)
 
         self.current_run_is_ai = ai_enabled
 
         if ai_enabled:
             self.run_type_label.setText(
-                "AI-assisted tets - heuristic findings, "
+                "AI-assisted tests - heuristic findings, "
                 "not formally declared schema constraints."
                 )
             self.result_tabs.setTabText(0, "AI Issues")
             self.result_tabs.setTabText(1, "AI Passed")
         else:
-            self.run_type_label.setText("Deterministic shema-driven tests.")
+            self.run_type_label.setText("Deterministic schema-driven tests.")
             self.result_tabs.setTabText(0, "Issues")
             self.result_tabs.setTabText(1, "Passed")
 
@@ -235,10 +221,19 @@ class MainWindow(QMainWindow):
 
 
     def handle_run_clicked(self):
-        self.start_test_run(category_filter=constants.DETERMINISTIC_CATEGORIES, ai_enabled=False, ai_model=None)
+        if not self.selected_deterministic_categories:
+            self.status_label.setText("Please select at least one deterministic test category.")
+            return
+        
+        self.start_test_run(category_filter=self.selected_deterministic_categories, ai_enabled=False, ai_model=None)
+
 
     def handle_ai_run_clicked(self):
-        self.start_test_run(category_filter=constants.AI_CATEGORIES, ai_enabled=True, ai_model=AI_MODEL)
+        if not self.selected_ai_categories:
+            self.status_label.setText("Please select at least one AI test category.")
+            return
+        self.start_test_run(category_filter=self.selected_ai_categories, ai_enabled=True, ai_model=AI_MODEL)
+
 
     def handle_run_finished(self, run_data):
         analysis = run_data["analysis"]
@@ -248,11 +243,6 @@ class MainWindow(QMainWindow):
         self.populate_skipped_table(run_data["skipped"])
 
         self.status_label.setText(f"Run #{run_data['run_id']} completed")
-
-
-
-
-
         self.summary_label.setText(
             f"Total: {analysis['total_tests']} | "
             f"Passed: {analysis['passed_count']} | "
@@ -262,6 +252,8 @@ class MainWindow(QMainWindow):
 
         self.run_button.setEnabled(True)
         self.ai_run_button.setEnabled(True)
+        self.selected_deterministic_button.setEnabled(True)
+        self.selected_ai_button.setEnabled(True)
 
 
     def handle_run_failed(self, error_message):
@@ -270,6 +262,8 @@ class MainWindow(QMainWindow):
         self.summary_label.setText("")
         self.run_button.setEnabled(True)
         self.ai_run_button.setEnabled(True)
+        self.selected_deterministic_button.setEnabled(True)
+        self.selected_ai_button.setEnabled(True)
         
 
     def cleanup_thread(self):
@@ -355,6 +349,22 @@ class MainWindow(QMainWindow):
                 self.skipped_table.setItem(row, column, QTableWidgetItem(text))
 
         self.skipped_table.resizeColumnsToContents()
+
+    def handle_select_deterministic_tests(self):
+        dialog = CategorySelectionDialog(categories=constants.DETERMINISTIC_CATEGORIES, selected_categories=self.selected_deterministic_categories, parent=self)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.selected_deterministic_categories = (dialog.get_selected_categories())
+
+            self.deterministic_selection_label.setText(f"{len(self.selected_deterministic_categories)} selected")
+
+    def handle_select_ai_tests(self):
+        dialog = CategorySelectionDialog(categories=constants.AI_CATEGORIES, selected_categories=self.selected_ai_categories, parent=self)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.selected_ai_categories = (dialog.get_selected_categories())
+
+            self.ai_selection_label.setText(f"{len(self.selected_ai_categories)} selected")
 
 def main():
     app = QApplication(sys.argv)
