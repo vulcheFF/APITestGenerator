@@ -167,7 +167,7 @@ class MainWindow(QMainWindow):
             "Total",
             "Passed",
             "Issues",
-            "Duration"
+            "Duration[ms]"
         ])
 
         self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -214,11 +214,57 @@ class MainWindow(QMainWindow):
 
         history_widget.setLayout(history_layout)
 
-        #main tabs
+        #comparison tables
+        self.compare_new_table=QTableWidget()
+        self.compare_resolved_table=QTableWidget()
+        self.compare_unchanged_table=QTableWidget()
 
+        comparison_tables = [
+            self.compare_new_table,
+            self.compare_resolved_table,
+            self.compare_unchanged_table,
+        ]
+
+        for table in comparison_tables:
+            table.setColumnCount(7)
+            table.setHorizontalHeaderLabels([
+                "Severity",
+                "Method",
+                "Path",
+                "Category",
+                "Field",
+                "Expected",
+                "Actual",
+            ])
+
+            table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+            table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+            table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+            table.setAlternatingRowColors(True)
+
+        #compare tabs
+        compare_widget = QWidget()
+        compare_layout = QVBoxLayout()
+        self.compare_header_label = QLabel("Select two runs from History and compare them.")
+        header_font = self.compare_header_label.font()
+        header_font.setBold(True)
+        header_font.setPointSize(header_font.pointSize() + 1)
+        self.compare_header_label.setFont(header_font)
+
+        self.compare_tabs = QTabWidget()
+        self.compare_tabs.addTab(self.compare_new_table, "New issues")
+        self.compare_tabs.addTab(self.compare_resolved_table, "Resolved issues")
+        self.compare_tabs.addTab(self.compare_unchanged_table, "Unchanged issues")
+
+        compare_layout.addWidget(self.compare_header_label)
+        compare_layout.addWidget(self.compare_tabs)
+
+        compare_widget.setLayout(compare_layout)
+        #main tabs
         self.main_tabs = QTabWidget()
         self.main_tabs.addTab(testing_widget, "Testing")
         self.main_tabs.addTab(history_widget, "History")
+        self.main_tabs.addTab(compare_widget, "Compare")
         
         #main layout
         layout = QVBoxLayout()
@@ -485,11 +531,6 @@ class MainWindow(QMainWindow):
         if run is None:
             return
 
-        run_summary = get_run_summary(run_id)
-        run = run_summary["run"]
-
-        if run is None:
-            return
 
         duration = (f"{run.duration_ms} ms" if run.duration_ms is not None else "N/A")
 
@@ -608,6 +649,7 @@ class MainWindow(QMainWindow):
         self.run_b_label.setText(f"Run B: #{run_id}")
         
     def handle_compare_runs(self):
+
         if self.run_a_id is None:
             self.history_summary_label.setText("Select Run A before comparing.")
             return
@@ -619,30 +661,47 @@ class MainWindow(QMainWindow):
             self.history_summary_label.setText("Run A and Run B must be different.")
             return
         
-        self.history_summary_label.setText(
-            f"Ready to compare Run #{self.run_a_id} "
-            f"with Run #{self.run_b_id}."
-        )
+        run_a_type = self.get_run_type_label(self.run_a_id)
+        run_b_type = self.get_run_type_label(self.run_b_id)
+
+        if run_a_type is None or run_b_type is None:
+            self.history_summary_label.setText("One of the selected runs no longer exists.")
+            return
+
+        if run_a_type != run_b_type:
+            self.history_summary_label.setText("Run A and Run B must be of the same type (Deterministic or AI).")
+            return
+        
 
         issues_a = self.get_historical_run_issues(self.run_a_id)
         issues_b = self.get_historical_run_issues(self.run_b_id)
 
         if issues_a is None or issues_b is None:
-            self.history_summary_label.setText("One of the selected runs no longer exists")
+            self.history_summary_label.setText("One of the selected runs no longer exists.")
             return
+        
         comparison = compare_run_issues(issues_a, issues_b)
 
-        print("Run A:", self.run_a_id)
-        print("Run B:", self.run_b_id)
-        print("New:", len(comparison["new"]))
-        print("Resolved:", len(comparison["resolved"]))
-        print("Unchanged:", len(comparison["unchanged"]))
+        self.compare_header_label.setText(
+            f"Run A: #{self.run_a_id} ({run_a_type}) | "
+            f"Run B: #{self.run_b_id} ({run_b_type})"
+        )
+
+        self.populate_comparison_table(self.compare_new_table, comparison["new"])
+        self.populate_comparison_table(self.compare_resolved_table, comparison["resolved"])
+        self.populate_comparison_table(self.compare_unchanged_table, comparison["unchanged"])
+
+        self.compare_tabs.setTabText(0, f"New issues ({len(comparison['new'])})")
+        self.compare_tabs.setTabText(1, f"Resolved issues ({len(comparison['resolved'])})")
+        self.compare_tabs.setTabText(2, f"Unchanged issues ({len(comparison['unchanged'])})")
+
+        self.main_tabs.setCurrentIndex(2)
 
         self.history_summary_label.setText(
             f"Run #{self.run_a_id} vs Run #{self.run_b_id} | "
-            f"New: {len(comparison['new'])} | "
-            f"Resolved: {len(comparison["resolved"])} | "
-            f"Unchanged: {len(comparison["unchanged"])}"
+            f"New issues: {len(comparison['new'])} | "
+            f"Resolved issues: {len(comparison['resolved'])} | "
+            f"Unchanged issues: {len(comparison['unchanged'])}"
         )
 
     def get_historical_run_issues(self, run_id):
@@ -654,7 +713,33 @@ class MainWindow(QMainWindow):
 
         return [self.history_issue_to_dict(issue) for issue in run_summary["issues"]]
 
-    
+    def populate_comparison_table(self, table, issues):
+        table.setRowCount(len(issues))
+
+        for row, issue in enumerate(issues):
+            values = [
+                issue.get("severity"),
+                issue.get("method"),
+                issue.get("template_path") or issue.get("path"),
+                issue.get("category"),
+                issue.get("field"),
+                issue.get("expected_status"),
+                issue.get("status_code"),
+            ]
+            for column, value in enumerate(values):
+                text = "" if value is None else str(value)
+                table.setItem(row, column, QTableWidgetItem(text))
+
+        table.resizeColumnsToContents()    
+
+    def get_run_type_label(self, run_id):
+        run_summary = get_run_summary(run_id)
+        run = run_summary["run"]
+
+        if run is None:
+            return None
+
+        return "AI" if run.ai_enabled else "Deterministic"
         
 def main():
     app = QApplication(sys.argv)

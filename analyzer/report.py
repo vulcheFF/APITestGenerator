@@ -149,63 +149,15 @@ def analyze_results(results: list[dict])-> dict:
                 "template_path": r.get("template_path"),
                 "category": constants.RESPONSE_SCHEMA_MISMATCH,
                 "field": r.get("field"),
-                "description": f"{r["description"]} - response body does not comply with the daclared schema {'; '.join(conformance_errors)}",
+                "description": 
+                    f"{r['description']} - response body does not comply with "
+                    f"the declared schema: {'; '.join(conformance_errors)}",
                 "expected_status": expected,
                 "status_code": actual,
                 "severity": determine_severity(constants.RESPONSE_SCHEMA_MISMATCH),
 
             })
-        # if expected is None:
-        #     passed.append({
-        #         "method": r["method"],
-        #         "path": r["path"],
-        #         "category": r.get("category"),
-        #         "field": r.get("field"),
-        #         "description": r["description"],                
-        #         "status_code": actual,
-        #     })
-        #     continue
-
-        # is_ok = (
-        #     is_acceptable_error_status(actual,expected) if expected >=400 else actual == expected
-        # )
-
-        # if not is_ok:    
-        #     issues.append({
-        #         "method": r["method"],
-        #         "path": r["path"],
-        #         "category": r.get("category"),
-        #         "field": r.get("field"),
-        #         "description": r["description"],
-        #         "expected_status": expected,
-        #         "status_code": actual,
-        #         "severity": determine_severity(r.get("category")),
-
-        #     })
-        # else:
-        #     conformance_errors  = r.get("schema_conformance_errors")
-        #     if conformance_errors:
-        #         issues.append({
-        #             "method": r["method"],
-        #             "path": r["path"],
-        #             "category": constants.RESPONSE_SCHEMA_MISMATCH,
-        #             "field": r.get("field"),
-        #             "description": f"{r['description']} — response body does not comply with the declared schema: {'; '.join(conformance_errors)}",
-        #             "expected_status": expected,
-        #             "status_code": actual,
-        #             "severity": determine_severity(constants.RESPONSE_SCHEMA_MISMATCH),
-        #         })
-        #     else:
-        #         passed.append({
-        #             "method": r["method"],
-        #             "path": r["path"],
-        #             "category": r.get("category"),
-        #             "field": r.get("field"),
-        #             "description": r["description"],                
-        #             "status_code": actual,
-        #         })
-
-
+        
     return {
         "total_tests": total,
         "issues_found": len(issues),
