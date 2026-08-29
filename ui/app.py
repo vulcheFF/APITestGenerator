@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
         #label
         self.status_label = QLabel("Ready!")
         self.summary_label = QLabel("No run yet!")
+        self.run_type_label = QLabel("")
 
         #thread
         self.thread = None
@@ -158,7 +159,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.ai_run_button)
         layout.addWidget(self.status_label)
         layout.addWidget(self.summary_label)
+        layout.addWidget(self.run_type_label)
         layout.addWidget(self.result_tabs)
+        
         #layout.addStretch()
 
         #central
@@ -171,12 +174,28 @@ class MainWindow(QMainWindow):
     def start_test_run(self, category_filter, ai_enabled, ai_model = None):
 
         base_url = self.base_url_input.text().strip().rstrip("/")
+        
 
         if not base_url:
             self.status_label.setText("Please enter an API base URL!")
             return
 
-        
+
+        self.current_run_is_ai = ai_enabled
+
+        if ai_enabled:
+            self.run_type_label.setText(
+                "AI-assisted tets - heuristic findings, "
+                "not formally declared schema constraints."
+                )
+            self.result_tabs.setTabText(0, "AI Issues")
+            self.result_tabs.setTabText(1, "AI Passed")
+        else:
+            self.run_type_label.setText("Deterministic shema-driven tests.")
+            self.result_tabs.setTabText(0, "Issues")
+            self.result_tabs.setTabText(1, "Passed")
+
+
         #deleting info 
         self.current_issues = []
         self.issues_table.setRowCount(0)
@@ -229,6 +248,10 @@ class MainWindow(QMainWindow):
         self.populate_skipped_table(run_data["skipped"])
 
         self.status_label.setText(f"Run #{run_data['run_id']} completed")
+
+
+
+
 
         self.summary_label.setText(
             f"Total: {analysis['total_tests']} | "
