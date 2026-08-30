@@ -31,6 +31,12 @@ def is_ai_enabled_for_run(category_filter: list[str] | None) -> bool:
     }
 
     return any(category in ai_categories for category in category_filter)
+
+def get_selected_categories_for_run(category_filter: list[str] | None,) -> list[str]:
+    if category_filter is not None:
+        return list(category_filter)
+
+    return list(constants.DETERMINISTIC_CATEGORIES + constants.AI_CATEGORIES)
     
 def get_default_path_value(param_schema: dict | None) -> str:
     param_type = (param_schema or {}).get("type", "integer")
@@ -821,7 +827,7 @@ if __name__ == "__main__":
 
     results, skipped = run_all_tests(base_url, category_filter = category_filter, seed = run_seed)
 
-    duration_ms = round(time.perf_counter() - started_at) * 1000
+    duration_ms = round((time.perf_counter() - started_at) * 1000)
 
 
     #results, skipped = run_all_tests("http://127.0.0.1:8000", category_filter=["valid_id","invalid_id_format","nonexistent_id","negative_id",])
@@ -842,7 +848,8 @@ if __name__ == "__main__":
             print(f"{s['method']} {s['path']} - {s['category']}: {s['reason']}")
 
     ai_enabled = is_ai_enabled_for_run(category_filter)
-    run_id = save_run(base_url, results, analysis, seed = run_seed, ai_enabled=ai_enabled, ai_model=AI_MODEL if ai_enabled else None, duration_ms=duration_ms)
+    selected_categories = get_selected_categories_for_run(category_filter)
+    run_id = save_run(base_url, results, analysis, seed = run_seed, ai_enabled=ai_enabled, ai_model=AI_MODEL if ai_enabled else None, duration_ms=duration_ms, selected_categories=selected_categories)
     print(f"\nSaved as run#{run_id}")
     print(
         f"Run metadata: seed = {run_seed}, "
