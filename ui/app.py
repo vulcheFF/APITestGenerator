@@ -1,4 +1,5 @@
 import json
+import csv
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget, QDialog, QFileDialog
 from PySide6.QtCore import QThread
@@ -204,13 +205,13 @@ class MainWindow(QMainWindow):
         self.compare_runs_button = QPushButton("Compare runs")
 
         #export button
-        self.export_json_button = QPushButton("Export selected run as JSON")
+        self.export_run_button = QPushButton("Export selected run...")
 
 
         self.set_run_a_button.clicked.connect(self.handle_set_run_a)
         self.set_run_b_button.clicked.connect(self.handle_set_run_b)
         self.compare_runs_button.clicked.connect(self.handle_compare_runs)
-        self.export_json_button.clicked.connect(self.handle_export_json)
+        self.export_run_button.clicked.connect(self.handle_export_run)
 
         history_layout.addWidget(self.history_summary_label)
 
@@ -219,7 +220,7 @@ class MainWindow(QMainWindow):
         history_layout.addWidget(self.set_run_a_button)
         history_layout.addWidget(self.set_run_b_button)
         history_layout.addWidget(self.compare_runs_button)
-        history_layout.addWidget(self.export_json_button)
+        history_layout.addWidget(self.export_run_button)
 
         history_layout.addWidget(self.history_table)
         
@@ -632,7 +633,7 @@ class MainWindow(QMainWindow):
             "description": result.description,
         }
 
-    def handle_export_json(self):
+    def handle_export_run(self):
         run_id = self.get_selected_history_run_id()
         if run_id is None:
             self.history_summary_label.setText("Select a history run before exporting.")
@@ -656,38 +657,99 @@ class MainWindow(QMainWindow):
             except (json.JSONDecodeError, TypeError):
                 selected_categories = None
 
-        export_data = {
-            "run": {
-                "id": run.id,
-                "timestamp": str(run.run_timestamp),
-                "base_url": run.base_url,
-                "type": "AI" if run.ai_enabled else "Deterministic",
-                "total_tests": run.total_tests,
-                "passed_count": run.passed_count,
-                "issues_found": run.issues_found,
-                "seed": run.seed,
-                "ai_enabled": run.ai_enabled,
-                "ai_model": run.ai_model,
-                "duration_ms": run.duration_ms,
-                "selected_categories": selected_categories,
 
-            },
-            "issues": issues,
-            "passed": passed,
-        }
-
-        file_path, _ = QFileDialog.getSaveFileName(self, "Export run as JSON", f"run_{run.id}.json", "JSON FIles(*.json)",)
+        
+        file_path, selected_filter = QFileDialog.getSaveFileName(self, "Export selected run", f"run_{run.id}.json", "JSON FIles(*.json);;CSV Files(*.csv)",)
         if not file_path:
             return
 
         try:
-            with open(file_path, "w", encoding="utf-8") as file:
-                json.dump(export_data, file, indent=2, ensure_ascii=False)
+            if selected_filter.startswith("JSON"):
+                if not file_path.lower().endswith(".json"):
+                    file_path += ".json"
+                export_data = {
+                    "run": {
+                        "id": run.id,
+                        "timestamp": str(run.run_timestamp),
+                        "base_url": run.base_url,
+                        "type": "AI" if run.ai_enabled else "Deterministic",
+                        "total_tests": run.total_tests,
+                        "passed_count": run.passed_count,
+                        "issues_found": run.issues_found,
+                        "seed": run.seed,
+                        "ai_enabled": run.ai_enabled,
+                        "ai_model": run.ai_model,
+                        "duration_ms": run.duration_ms,
+                        "selected_categories": selected_categories,
+
+                    },
+                    "issues": issues,
+                    "passed": passed,
+                }
+                export_format = "JSON"           
+
+                with open(file_path, "w", encoding="utf-8") as file:
+                    json.dump(export_data, file, indent=2, ensure_ascii=False)
+
+            elif selected_filter.startswith("CSV"):
+                if not file_path.lower().endswith(".csv"):
+                    file_path += ".csv"
+                rows = []
+
+                for issue in issues:
+                    rows.append({
+                        "result_type": "issue",
+                        "severity": issue.get("severity"),
+                        "method": issue.get("method"),
+                        "path": issue.get("path"),
+                        "template_path": issue.get("template_path"),
+                        "category": issue.get("category"),
+                        "field": issue.get("field"),
+                        "expected_status": issue.get("expected_status"),
+                        "actual_status": issue.get("status_code"),
+                        "description": issue.get("description"),
+                    })
+
+                for result in passed:
+                    rows.append({
+                        "result_type": "passed",
+                        "severity": "",
+                        "method": result.get("method"),
+                        "path": result.get("path"),
+                        "template_path": result.get("template_path"),
+                        "category": result.get("category"),
+                        "field": result.get("field"),
+                        "expected_status": "",
+                        "actual_status": result.get("status_code"),
+                        "description": result.get("description"),
+                    })
+
+                fieldnames = [
+                    "result_type",
+                    "severity",
+                    "method",
+                    "path",
+                    "template_path",
+                    "category",
+                    "field",
+                    "expected_status",
+                    "actual_status",
+                    "description",
+                ]
+                with open(file_path, "w", newline="", encoding="utf-8-sig") as file:
+                    writer = csv.DictWriter(file, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(rows)
+
+                export_format = "CSV"
+            else:
+                self.history_summary_label.setText("Unsupported export format.")
+                return
         except OSError as exc:
-            self.history_summary_label.setText(f"Faield to export run #{run.id}: {exc}")
+            self.history_summary_label.setText(f"Failed to export run #{run.id}: {exc}")
             return
 
-        self.history_summary_label.setText(f"Run #{run.id} exported successfully as JSON.")
+        self.history_summary_label.setText(f"Run #{run.id} exported successfully as {export_format}.")
 
 
 
