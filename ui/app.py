@@ -1,6 +1,6 @@
 import json
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget, QDialog
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget, QDialog, QFileDialog
 from PySide6.QtCore import QThread
 from generator import constants
 from storage.database import init_db
@@ -203,10 +203,14 @@ class MainWindow(QMainWindow):
         self.set_run_b_button = QPushButton("Set as Run B")
         self.compare_runs_button = QPushButton("Compare runs")
 
+        #export button
+        self.export_json_button = QPushButton("Export selected run as JSON")
+
 
         self.set_run_a_button.clicked.connect(self.handle_set_run_a)
         self.set_run_b_button.clicked.connect(self.handle_set_run_b)
         self.compare_runs_button.clicked.connect(self.handle_compare_runs)
+        self.export_json_button.clicked.connect(self.handle_export_json)
 
         history_layout.addWidget(self.history_summary_label)
 
@@ -215,6 +219,7 @@ class MainWindow(QMainWindow):
         history_layout.addWidget(self.set_run_a_button)
         history_layout.addWidget(self.set_run_b_button)
         history_layout.addWidget(self.compare_runs_button)
+        history_layout.addWidget(self.export_json_button)
 
         history_layout.addWidget(self.history_table)
         
@@ -626,6 +631,65 @@ class MainWindow(QMainWindow):
             "status_code": result.status_code,
             "description": result.description,
         }
+
+    def handle_export_json(self):
+        run_id = self.get_selected_history_run_id()
+        if run_id is None:
+            self.history_summary_label.setText("Select a history run before exporting.")
+            return
+
+        run_summary = get_run_summary(run_id)
+        run = run_summary["run"]
+
+        if run is None:
+            self.history_summary_label.setText("Selected run no longer exists.")
+            return
+
+        issues = [self.history_issue_to_dict(issue) for issue in run_summary["issues"]]
+        passed = [self.history_result_to_dict(result) for result in run_summary["passed"]]
+
+        selected_categories = None
+
+        if run.selected_categories is not None:
+            try:
+                selected_categories = json.loads(run.selected_categories)
+            except (json.JSONDecodeError, TypeError):
+                selected_categories = None
+
+        export_data = {
+            "run": {
+                "id": run.id,
+                "timestamp": str(run.run_timestamp),
+                "base_url": run.base_url,
+                "type": "AI" if run.ai_enabled else "Deterministic",
+                "total_tests": run.total_tests,
+                "passed_count": run.passed_count,
+                "issues_found": run.issues_found,
+                "seed": run.seed,
+                "ai_enabled": run.ai_enabled,
+                "ai_model": run.ai_model,
+                "duration_ms": run.duration_ms,
+                "selected_categories": selected_categories,
+
+            },
+            "issues": issues,
+            "passed": passed,
+        }
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export run as JSON", f"run_{run.id}.json", "JSON FIles(*.json)",)
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "w", encoding="utf-8") as file:
+                json.dump(export_data, file, indent=2, ensure_ascii=False)
+        except OSError as exc:
+            self.history_summary_label.setText(f"Faield to export run #{run.id}: {exc}")
+            return
+
+        self.history_summary_label.setText(f"Run #{run.id} exported successfully as JSON.")
+
+
 
     def get_selected_history_run_id(self):
         row = self.history_table.currentRow()
