@@ -1,11 +1,12 @@
 import random
 import time
-
 from PySide6.QtCore import QObject, Signal, Slot
-
 from executor.pipeline import run_all_tests
 from analyzer.report import analyze_results
 from storage.repository import save_run
+from analyzer.spec_overview import build_spec_overview, analyze_spec_with_ai, format_spec_overview_for_llm
+from generator.spec_parser import fetch_openapi_spec
+
 
 class TestWorker(QObject):
     finished = Signal(object)
@@ -40,6 +41,31 @@ class TestWorker(QObject):
                 "skipped": skipped,
                 "analysis": analysis,
             })
+
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+class SpecAnalysisWorker(QObject):
+    finished = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, base_url: str):
+        super().__init__()
+        self.base_url = base_url
+
+
+    @Slot()
+    def run(self):
+        try:
+            spec = fetch_openapi_spec(self.base_url)
+
+            overview = build_spec_overview(spec)
+
+            overview_text = format_spec_overview_for_llm(overview)
+
+            analysis = analyze_spec_with_ai(overview_text)
+
+            self.finished.emit(analysis)
 
         except Exception as exc:
             self.failed.emit(str(exc))

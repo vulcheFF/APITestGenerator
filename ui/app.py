@@ -7,7 +7,7 @@ from generator import constants
 from storage.database import init_db
 from storage.repository import get_recent_runs, get_run_summary
 from ai.ollama_client import MODEL as AI_MODEL
-from ui.workers import TestWorker
+from ui.workers import TestWorker, SpecAnalysisWorker
 from ui.dialogs import CategorySelectionDialog
 from analyzer.run_comparison import compare_run_issues
 
@@ -53,6 +53,8 @@ class MainWindow(QMainWindow):
         #thread
         self.thread = None
         self.worker = None
+        self.spec_thread = None
+        self.spec_worker = None
 
         #run id
         self.run_a_id = None
@@ -197,6 +199,7 @@ class MainWindow(QMainWindow):
         self.history_summary_label.setFont(font)
         self.history_summary_label.setStyleSheet("padding: 6px;")
 
+        #run button
         self.run_a_label = QLabel("Run A: Not selected")
         self.run_b_label = QLabel("Run B: Not selected")
 
@@ -281,11 +284,61 @@ class MainWindow(QMainWindow):
         compare_layout.addWidget(self.compare_tabs)
         compare_layout.addWidget(self.compare_details)
         compare_widget.setLayout(compare_layout)
+
+        #analyze tab
+        analyze_widget = QWidget()
+        analyze_layout = QVBoxLayout()
+
+
+        #spec analysis
+        self.spec_analysis_label = QLabel("AI Spec Analysis")
+
+        spec_analysis_font = self.spec_analysis_label.font()
+        spec_analysis_font.setBold(True)
+        spec_analysis_font.setPointSize(spec_analysis_font.pointSize() + 1)
+        self.spec_analysis_label.setFont(spec_analysis_font)
+
+        #button
+        self.analyze_spec_button = QPushButton("Analyze OpenAPI spec")
+
+        self.spec_analysis_output = QTextEdit()
+        self.spec_analysis_output.setReadOnly(True)
+        self.spec_analysis_output.setPlaceholderText("AI analysis of the OpenAPI specification will appear here.")
+
+        #run analysis
+        self.run_analysis_label = QLabel("AI Run Analysis")
+        run_analysis_font = self.run_analysis_label.font()
+        run_analysis_font.setBold(True)
+        run_analysis_font.setPointSize(run_analysis_font.pointSize() + 1)
+        self.run_analysis_label.setFont(run_analysis_font)
+
+        self.analyze_selected_run_label = QLabel("No history run selected.")
+
+        self.analyze_run_button = QPushButton("Analyze selected run")
+
+        self.run_analysis_output = QTextEdit()
+        self.run_analysis_output.setReadOnly(True)
+        self.run_analysis_output.setPlaceholderText("AI analysis of the selected run will appear here.")
+
+
+        analyze_layout.addWidget(self.spec_analysis_label)
+        analyze_layout.addWidget(self.analyze_spec_button)
+        analyze_layout.addWidget(self.spec_analysis_output)
+        analyze_layout.addWidget(self.run_analysis_label)
+        analyze_layout.addWidget(self.analyze_selected_run_label)
+        analyze_layout.addWidget(self.analyze_run_button)
+        analyze_layout.addWidget(self.run_analysis_output)
+        analyze_widget.setLayout(analyze_layout)
+
+        self.analyze_spec_button.clicked.connect(self.handle_analyze_spec)
+        self.analyze_run_button.clicked.connect(self.handle_analyze_run)
+
         #main tabs
         self.main_tabs = QTabWidget()
         self.main_tabs.addTab(testing_widget, "Testing")
         self.main_tabs.addTab(history_widget, "History")
         self.main_tabs.addTab(compare_widget, "Compare")
+        self.main_tabs.addTab(analyze_widget, "Analyze")
         
         #main layout
         layout = QVBoxLayout()
@@ -946,6 +999,60 @@ class MainWindow(QMainWindow):
             f"Description: {issue.get('description', '')}"
         )
         self.compare_details.setPlainText(details)
+
+
+    def handle_analyze_spec(self):
+        base_url = self.base_url_input.text().strip().rstrip("/")
+
+        if not base_url:
+            self.spec_analysis_output("Please enter an API base url first.")
+            return
+
+        self.analyze_spec_button.setEnabled(False)
+
+        self.spec_analysis_output.setPlainText("Analyzing OpenAPI specification...")
+
+        self.spec_thread = QThread()
+        self.spec_worker = SpecAnalysisWorker(base_url)
+
+        self.spec_worker.moveToThread(self.spec_thread)
+
+        self.spec_thread.started.connect(self.spec_worker.run)
+        self.spec_worker.finished.connect(self.handle_spec_analysis_finished)
+        self.spec_worker.failed.connect(self.handle_spec_analysis_failed)
+
+        self.spec_worker.finished.connect(self.spec_thread.quit)
+        self.spec_worker.failed.connect(self.spec_thread.quit)
+
+        self.spec_worker.finished.connect(self.spec_worker.deleteLater)
+        self.spec_worker.failed.connect(self.spec_worker.deleteLater)
+
+        self.spec_thread.finished.connect(self.spec_thread.deleteLater)
+        self.spec_thread.finished.connect(self.cleanup_spec_thread)
+
+        self.spec_thread.start()
+
+
+
+    def handle_spec_analysis_finished(self, analysis):
+        self.spec_analysis_output.setPlainText(analysis)
+        self.analyze_spec_button.setEnabled(True)
+
+    def handle_spec_analysis_failed(self, error_message):
+        self.spec_analysis_output.setPlainText(f"Spec analysis failed: {error_message}")
+        self.analyze_spec_button.setEnabled(True)
+
+    def cleanup_spec_thread(self):
+        self.spec_thread = None
+        self.spec_woprker = None
+
+
+    def handle_analyze_run(self):
+        self.run_analysis_output.setPlainText("Run analysis placeholder")
+
+
+
+
 def main():
     app = QApplication(sys.argv)
 
