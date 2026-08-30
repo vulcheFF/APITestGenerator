@@ -1,3 +1,4 @@
+import json
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget, QDialog
 from PySide6.QtCore import QThread
@@ -686,6 +687,18 @@ class MainWindow(QMainWindow):
             self.history_summary_label.setText("Run A and Run B must be of the same type (Deterministic or AI).")
             return
         
+        run_a_categories = self.get_run_selected_categories(self.run_a_id)
+        run_b_categories = self.get_run_selected_categories(self.run_b_id)
+
+        if run_a_categories is None or run_b_categories is None:
+            self.history_summary_label.setText("Cannot compare these runs because selected categories were not recorded for one or both runs.")
+            return
+
+        if run_a_categories != run_b_categories:
+            self.history_summary_label.setText("Run A and Run B must use the same selected test categories.")
+            return
+        
+
 
         issues_a = self.get_historical_run_issues(self.run_a_id)
         issues_b = self.get_historical_run_issues(self.run_b_id)
@@ -755,6 +768,21 @@ class MainWindow(QMainWindow):
             return None
 
         return "AI" if run.ai_enabled else "Deterministic"
+
+    def get_run_selected_categories(self, run_id):
+        run_summary = get_run_summary(run_id)
+        run = run_summary["run"]
+
+        if run is None:
+            return None
+        
+        if run.selected_categories is None:
+            return None
+
+        try:
+            return set(json.loads(run.selected_categories))
+        except (json.JSONDecodeError, TypeError):
+            return None
 
     def handle_comparison_issue_selected(self, row, column):
         table = self.sender()

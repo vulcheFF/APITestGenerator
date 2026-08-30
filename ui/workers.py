@@ -30,7 +30,7 @@ class TestWorker(QObject):
 
             analysis = analyze_results(results)
 
-            run_id = save_run(self.base_url, results, analysis, seed = run_seed, ai_enabled=self.ai_enabled, ai_model= self.ai_model, duration_ms=duration_ms,)
+            run_id = save_run(self.base_url, results, analysis, seed = run_seed, ai_enabled=self.ai_enabled, ai_model= self.ai_model, duration_ms=duration_ms, selected_categories=self.category_filter)
 
             self.finished.emit({
                 "run_id": run_id,

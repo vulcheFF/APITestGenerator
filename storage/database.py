@@ -6,6 +6,7 @@ RUN_METADATA_COLUMNS = {
     "ai_enabled": "BOOLEAN",
     "ai_model": "VARCHAR",
     "duration_ms": "INTEGER",
+    "selected_categories": "VARCHAR",
 }
 
 RESULT_METADATA_COLUMNS = {"template_path": "VARCHAR"}

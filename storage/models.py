@@ -13,6 +13,7 @@ class TestRun(SQLModel, table = True):
     ai_enabled: Optional[bool] = None
     ai_model: Optional[str] = None
     duration_ms: Optional[int] = None
+    selected_categories: Optional[str] = None
 
 
 class TestResult(SQLModel, table = True):

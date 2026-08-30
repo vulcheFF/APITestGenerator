@@ -4,8 +4,9 @@ from storage.database import get_session, engine
 from storage.models import TestRun, TestResult, Issue
 from sqlmodel import Session, select
 
-def save_run(base_url: str, results: list[dict], analysis: dict, *, seed: int| None = None, ai_enabled: bool | None = None, ai_model: str | None = None, duration_ms: int | None = None) -> int:
+def save_run(base_url: str, results: list[dict], analysis: dict, *, seed: int| None = None, ai_enabled: bool | None = None, ai_model: str | None = None, duration_ms: int | None = None, selected_categories: list[str] | None = None) -> int:
     with get_session() as session:
+        selected_categories_json = (json.dumps(sorted(selected_categories)) if selected_categories is not None else None)
         run = TestRun(
             base_url=base_url,
             total_tests=analysis["total_tests"],
@@ -15,6 +16,7 @@ def save_run(base_url: str, results: list[dict], analysis: dict, *, seed: int| N
             ai_enabled=ai_enabled,
             ai_model=ai_model,
             duration_ms=duration_ms,
+            selected_categories = selected_categories_json,
 
         )
         session.add(run)
