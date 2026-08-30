@@ -543,7 +543,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         result["acceptable_statuses"] = sorted(success_codes) if success_codes else [200]
                     else:
                         result["expected_status"] = case["expected_status"]
-                    result["description"] = case["description"] if value == case["value"] else f"{case['description']} (reall id = {value})"
+                    result["description"] = case["description"] if value == case["value"] else f"{case['description']} (real id = {value})"
                     results.append(result)
             else:
                 for target_param in path_params:
