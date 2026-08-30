@@ -56,6 +56,12 @@ class MainWindow(QMainWindow):
         self.run_a_id = None
         self.run_b_id = None
 
+        self.current_comparison = {
+            "new": [],
+            "resolved": [],
+            "unchanged": [],
+        }
+
         #issue table
         self.issues_table = QTableWidget()
         self.issues_table.setColumnCount(7)
@@ -242,6 +248,9 @@ class MainWindow(QMainWindow):
             table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
             table.setAlternatingRowColors(True)
 
+        self.compare_new_table.cellClicked.connect(self.handle_comparison_issue_selected)
+        self.compare_resolved_table.cellClicked.connect(self.handle_comparison_issue_selected)
+        self.compare_unchanged_table.cellClicked.connect(self.handle_comparison_issue_selected)
         #compare tabs
         compare_widget = QWidget()
         compare_layout = QVBoxLayout()
@@ -256,9 +265,14 @@ class MainWindow(QMainWindow):
         self.compare_tabs.addTab(self.compare_resolved_table, "Resolved issues")
         self.compare_tabs.addTab(self.compare_unchanged_table, "Unchanged issues")
 
+        self.compare_details = QTextEdit()
+        self.compare_details.setReadOnly(True)
+        self.compare_details.setPlaceholderText("Select a comparison issue to view details.")
+        self.compare_details.setMaximumHeight(160)
+    
         compare_layout.addWidget(self.compare_header_label)
         compare_layout.addWidget(self.compare_tabs)
-
+        compare_layout.addWidget(self.compare_details)
         compare_widget.setLayout(compare_layout)
         #main tabs
         self.main_tabs = QTabWidget()
@@ -681,7 +695,8 @@ class MainWindow(QMainWindow):
             return
         
         comparison = compare_run_issues(issues_a, issues_b)
-
+        self.current_comparison = comparison
+        self.compare_details.clear()
         self.compare_header_label.setText(
             f"Run A: #{self.run_a_id} ({run_a_type}) | "
             f"Run B: #{self.run_b_id} ({run_b_type})"
@@ -740,7 +755,43 @@ class MainWindow(QMainWindow):
             return None
 
         return "AI" if run.ai_enabled else "Deterministic"
-        
+
+    def handle_comparison_issue_selected(self, row, column):
+        table = self.sender()
+
+        if table is self.compare_new_table:
+            issues = self.current_comparison["new"]
+            comparison_status = "New issue"
+
+        elif table is self.compare_resolved_table:
+            issues = self.current_comparison["resolved"]
+            comparison_status = "Resolved issue"
+
+        elif table is self.compare_unchanged_table:
+            issues = self.current_comparison["unchanged"]
+            comparison_status = "Unchanged issue"
+
+        else:
+            return
+
+        if row < 0 or row >= len(issues):
+            return
+
+        issue = issues[row]
+        path = issue.get("template_path") or issue.get("path")
+
+        details = (
+            f"Comparison status: {comparison_status}\n"
+            f"Severity: {issue.get('severity')}\n"
+            f"Method: {issue.get('method')}\n"
+            f"Path: {path}\n"
+            f"Category: {issue.get('category')}\n"
+            f"Field: {issue.get('field') or 'N/A'}\n"
+            f"Expected status: {issue.get('expected_status')}\n"
+            f"Actual status: {issue.get('status_code')}\n"
+            f"Description: {issue.get('description', '')}"
+        )
+        self.compare_details.setPlainText(details)
 def main():
     app = QApplication(sys.argv)
 
