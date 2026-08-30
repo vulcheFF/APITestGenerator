@@ -5,8 +5,9 @@ from executor.pipeline import run_all_tests
 from analyzer.report import analyze_results
 from storage.repository import save_run
 from analyzer.spec_overview import build_spec_overview, analyze_spec_with_ai, format_spec_overview_for_llm
+from analyzer.run_analysis import analyze_run_with_ai, build_run_analysis_text
 from generator.spec_parser import fetch_openapi_spec
-
+from storage.repository import get_run_summary
 
 class TestWorker(QObject):
     finished = Signal(object)
@@ -65,6 +66,58 @@ class SpecAnalysisWorker(QObject):
 
             analysis = analyze_spec_with_ai(overview_text)
 
+            self.finished.emit(analysis)
+
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+class RunAnalysisWorker(QObject):
+    finished = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, run_id: int):
+        super().__init__()
+        self.run_id = run_id
+
+    @Slot()
+    def run(self):
+        try:
+            summary = get_run_summary(self.run_id)
+            run = summary["run"]
+
+            if run is None:
+                raise ValueError(f"Run #{self.run_id} no longer exists.")
+
+            issues = [
+                {
+                    "severity": issue.severity,
+                    "method": issue.method,
+                    "path": issue.path,
+                    "template_path": issue.template_path,
+                    "category": issue.category,
+                    "field": issue.field,
+                    "expected_status": issue.expected_status,
+                    "status_code": issue.status_code,
+                    "description": issue.description,
+                }
+                for issue in summary["issues"]
+            ]
+
+            passed= [
+                {
+                    "method": result.method,
+                    "path": result.path,
+                    "template_path": result.template_path,
+                    "category": result.category,
+                    "field": result.field,
+                    "status_code": result.status_code,
+                    "description": result.description,
+                }
+                for result in summary["passed"]
+            ]
+
+            run_text = build_run_analysis_text(run, issues, passed)
+            analysis = analyze_run_with_ai(run_text)
             self.finished.emit(analysis)
 
         except Exception as exc:

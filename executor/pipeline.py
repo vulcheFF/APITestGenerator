@@ -382,6 +382,8 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 results.append(result)
 
             for skipped in get_skipped_categories(schema):
+                if category_filter is not None and skipped["category"] not in category_filter:
+                    continue
                 all_skipped.append({
                     "path": endpoint["path"],
                     "method": endpoint["method"],
@@ -493,6 +495,8 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["description"] = "Get list endpoint (no filters)"
                     results.append(result)
                 for skipped in get_skipped_query_categories(query_params):
+                    if category_filter is not None and skipped["category"] not in category_filter:
+                        continue
                     all_skipped.append({
                         "path": endpoint["path"],
                         "method": endpoint["method"],

@@ -7,7 +7,7 @@ from generator import constants
 from storage.database import init_db
 from storage.repository import get_recent_runs, get_run_summary
 from ai.ollama_client import MODEL as AI_MODEL
-from ui.workers import TestWorker, SpecAnalysisWorker
+from ui.workers import TestWorker, SpecAnalysisWorker, RunAnalysisWorker
 from ui.dialogs import CategorySelectionDialog
 from analyzer.run_comparison import compare_run_issues
 
@@ -55,10 +55,14 @@ class MainWindow(QMainWindow):
         self.worker = None
         self.spec_thread = None
         self.spec_worker = None
+        self.run_analysis_thread = None
+        self.run_analysis_worker = None
 
         #run id
         self.run_a_id = None
         self.run_b_id = None
+        self.selected_analysis_run_id = None
+        self.active_analysis_run_id = None
 
         self.current_comparison = {
             "new": [],
@@ -434,6 +438,7 @@ class MainWindow(QMainWindow):
 
 
     def handle_run_finished(self, run_data):
+        self.result_tabs.setTabText(2,"Skipped")
         analysis = run_data["analysis"]
 
         self.populate_issues_table(analysis["issues"])
@@ -615,6 +620,7 @@ class MainWindow(QMainWindow):
         self.populate_passed_table(historical_passed)
 
         self.populate_skipped_table([])
+        self.result_tabs.setTabText(2,"Skipped (not stored)")
 
         self.status_label.setText(f"Viewing historical run #{run.id}")
 
@@ -650,6 +656,9 @@ class MainWindow(QMainWindow):
             return
 
         run_type = "AI" if run.ai_enabled else "Deterministic"
+
+        self.selected_analysis_run_id = run.id
+        self.analyze_selected_run_label.setText(f"Selected run: #{run.id} ({run_type})")
 
         duration = (f"{run.duration_ms} ms" if run.duration_ms is not None else "N/A")
 
@@ -1005,7 +1014,7 @@ class MainWindow(QMainWindow):
         base_url = self.base_url_input.text().strip().rstrip("/")
 
         if not base_url:
-            self.spec_analysis_output("Please enter an API base url first.")
+            self.spec_analysis_output.setPlainText("Please enter an API base url first.")
             return
 
         self.analyze_spec_button.setEnabled(False)
@@ -1044,14 +1053,60 @@ class MainWindow(QMainWindow):
 
     def cleanup_spec_thread(self):
         self.spec_thread = None
-        self.spec_woprker = None
+        self.spec_worker = None
 
 
     def handle_analyze_run(self):
-        self.run_analysis_output.setPlainText("Run analysis placeholder")
+
+        if self.selected_analysis_run_id is None:
+            self.run_analysis_output.setPlainText("Select a history run first.")
+            return
+
+        self.active_analysis_run_id = self.selected_analysis_run_id
+        self.analyze_run_button.setEnabled(False)
+
+        self.run_analysis_output.setPlainText(f"Analyzing Run #{self.active_analysis_run_id}...")
 
 
+        self.run_analysis_thread = QThread()
+        self.run_analysis_worker = RunAnalysisWorker(self.active_analysis_run_id)
 
+        self.run_analysis_worker.moveToThread(self.run_analysis_thread)
+
+        self.run_analysis_thread.started.connect(self.run_analysis_worker.run)
+        self.run_analysis_worker.finished.connect(self.handle_run_analysis_finished)
+        self.run_analysis_worker.failed.connect(self.handle_run_analysis_failed)
+
+        self.run_analysis_worker.finished.connect(self.run_analysis_thread.quit)
+        self.run_analysis_worker.failed.connect(self.run_analysis_thread.quit)
+
+        self.run_analysis_worker.finished.connect(self.run_analysis_worker.deleteLater)
+        self.run_analysis_worker.failed.connect(self.run_analysis_worker.deleteLater)
+
+        self.run_analysis_thread.finished.connect(self.run_analysis_thread.deleteLater)
+        self.run_analysis_thread.finished.connect(self.cleanup_run_analysis_thread)
+
+        self.run_analysis_thread.start()
+
+
+    def handle_run_analysis_finished(self, analysis):
+        run_id = self.active_analysis_run_id
+        self.run_analysis_output.setPlainText(
+            f"AI analysis for Run #{run_id}\n\n"
+            f"{analysis}"
+            )
+        self.analyze_run_button.setEnabled(True)
+
+    def handle_run_analysis_failed(self, error_message):
+        self.run_analysis_output.setPlainText(
+            f"Run #{self.active_analysis_run_id} analysis failed: "
+            f"{error_message}"
+            )
+        self.analyze_run_button.setEnabled(True)
+
+    def cleanup_run_analysis_thread(self):
+        self.run_analysis_thread = None
+        self.run_analysis_worker = None
 
 def main():
     app = QApplication(sys.argv)
