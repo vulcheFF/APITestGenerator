@@ -5,7 +5,7 @@ import re
 ALL_HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
 
 def fetch_openapi_spec(base_url: str) -> dict:
-    response = requests.get(f"{base_url}/openapi.json")
+    response = requests.get(f"{base_url}/openapi.json", timeout = 5)
     response.raise_for_status()
     return response.json()
 

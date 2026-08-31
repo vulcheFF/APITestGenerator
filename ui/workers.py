@@ -28,7 +28,7 @@ class TestWorker(QObject):
             run_seed = self.seed if self.seed is not None else random.SystemRandom().randint(0, 2**32 - 1)
             started_at = time.perf_counter()
 
-            results, skipped = run_all_tests(self.base_url, category_filter=self.category_filter, seed=run_seed)
+            results, skipped = run_all_tests(self.base_url, category_filter=self.category_filter, seed=run_seed,  ai_model=self.ai_model,)
 
             duration_ms = round((time.perf_counter() - started_at)*1000)
 

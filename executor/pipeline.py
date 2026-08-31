@@ -123,7 +123,7 @@ def fill_path_params_with_values(path: str, values: dict[str, object],) -> str:
     return result
 
 
-def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None) -> tuple[list[dict], list[dict]]:
+def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None, ai_model:str | None = None) -> tuple[list[dict], list[dict]]:
     if seed is not None:
         random.seed(seed)
 
@@ -244,7 +244,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             #put_id_sync = prepare_put_id_sync(base_url,endpoint,schema,path_param_schema,)
             if category_filter is None or constants.AI_IMPLICIT_CONSTRAINT_VIOLATION in category_filter or constants.AI_IMPLICIT_CONSTRAINT_VALID in category_filter:
-                ai_cases = generate_ai_constraint_cases(schema)
+                ai_cases = generate_ai_constraint_cases(schema, ai_model = ai_model)
                 generate_ai_categories= {case["category"] for case in ai_cases}
                 for ai_category in (constants.AI_IMPLICIT_CONSTRAINT_VIOLATION, constants.AI_IMPLICIT_CONSTRAINT_VALID):
                     if category_filter is not None and ai_category not in category_filter:
@@ -308,7 +308,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         cleanup_if_unexpectedly_succeeded(base_url, endpoints, endpoint, result, schema)
                   
             if category_filter is None or constants.AI_CROSS_FIELD_VIOLATION in category_filter:
-                cross_case = generate_cross_field_case(schema)
+                cross_case = generate_cross_field_case(schema, ai_model = ai_model)
                 if cross_case is None:
                     all_skipped.append({
                         "path": endpoint["path"],

@@ -444,14 +444,14 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
 
 from concurrent.futures import ThreadPoolExecutor
 
-def generate_ai_constraint_cases(schema: dict, put_id_sync: dict | None = None) -> list[dict]:
+def generate_ai_constraint_cases(schema: dict, put_id_sync: dict | None = None, ai_model: str | None = None) -> list[dict]:
 
     properties = schema.get("properties", {})
     test_cases = []
     field_items = list(properties.items())
 
     with ThreadPoolExecutor(max_workers=4) as executor:
-        ai_results = list(executor.map(lambda item: (item[0], mine_implicit_constraint(item[0], item[1])), field_items))
+        ai_results = list(executor.map(lambda item: (item[0], mine_implicit_constraint(item[0], item[1], ai_model=ai_model)), field_items))
 
 
     
@@ -497,8 +497,8 @@ def generate_ai_constraint_cases(schema: dict, put_id_sync: dict | None = None) 
     return test_cases
 
 
-def generate_cross_field_case(schema: dict) -> dict | None:
-    ai_result = mine_cross_field_constraint(schema)
+def generate_cross_field_case(schema: dict, ai_model: str | None = None) -> dict | None:
+    ai_result = mine_cross_field_constraint(schema, ai_model = ai_model)
     if ai_result is None:
         return None
 

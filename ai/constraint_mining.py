@@ -99,7 +99,7 @@ def _violates_formal_field_schema(value, schema: dict) -> bool:
     return False
 
 
-def mine_implicit_constraint(field_name: str, field_schema: dict) -> dict | None:
+def mine_implicit_constraint(field_name: str, field_schema: dict, ai_model: str | None = None) -> dict | None:
     has_hints = field_schema.get("description") or field_schema.get("example") is not None
     if not has_hints:
         return None
@@ -201,7 +201,7 @@ def mine_implicit_constraint(field_name: str, field_schema: dict) -> dict | None
             "reason": "brief explanation based only on the provided description/example"
         }}
         """
-    raw_response = query_ollama(prompt)
+    raw_response = query_ollama(prompt, model = ai_model)
     #print("DEBUG raw_response:", repr(raw_response))
     if raw_response is None:
         return None
@@ -245,7 +245,7 @@ def mine_implicit_constraint(field_name: str, field_schema: dict) -> dict | None
 
 
 
-def mine_cross_field_constraint(schema: dict) -> dict | None:
+def mine_cross_field_constraint(schema: dict, ai_model: str | None = None) -> dict | None:
     properties = schema.get("properties", {})
     field_summaries = []
     for name, prop in properties.items():
@@ -282,7 +282,7 @@ def mine_cross_field_constraint(schema: dict) -> dict | None:
         "invalid_value_b": "value or null"}}"""
 
     
-    raw_response = query_ollama(prompt)
+    raw_response = query_ollama(prompt, model=ai_model)
     if raw_response is None:
         return None
 

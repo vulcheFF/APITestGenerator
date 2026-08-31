@@ -361,7 +361,7 @@ class MainWindow(QMainWindow):
         self.populate_history_table()
 
 
-    def start_test_run(self, category_filter, ai_enabled, ai_model = None, seed = None, base_url_override = None):
+    def start_test_run(self, category_filter, ai_enabled, ai_model = None, seed = None, base_url_override = None, status_message = None):
         if base_url_override:
             base_url = base_url_override.strip().rstrip("/")
         else:
@@ -402,7 +402,7 @@ class MainWindow(QMainWindow):
 
         #start
 
-        self.status_label.setText("Running tests...")
+        self.status_label.setText(status_message or "Running tests...")
         self.summary_label.setText("")
 
         self.thread = QThread()
@@ -578,7 +578,7 @@ class MainWindow(QMainWindow):
             self.ai_selection_label.setText(f"{len(self.selected_ai_categories)} categories selected")
 
     def populate_history_table(self):
-        runs = get_recent_runs(limit=50)
+        runs = get_recent_runs(limit=None)
 
         self.history_table.setRowCount(len(runs))
 
@@ -1169,15 +1169,16 @@ class MainWindow(QMainWindow):
 
         if error is not None:
             self.history_summary_label.setText(error)
+            return
 
         self.base_url_input.setText(config["base_url"])
 
         self.main_tabs.setCurrentIndex(0)
 
         if config["ai_enabled"]:
-            self.status_label.setText("Re-runing saved AI configuration. AI-assisted results are best-effort reproducible")
+            status_message = "Re-running saved AI configuration. AI-assisted results are best-effort reproducible"
         else:
-            self.status_label.setText("Re-runing saved deterministic configuration.")
+            status_message = "Re-running saved deterministic configuration."
 
         self.start_test_run(
             category_filter=config["selected_categories"],
@@ -1185,6 +1186,7 @@ class MainWindow(QMainWindow):
             ai_model=config["ai_model"],
             seed=config["seed"],
             base_url_override=config["base_url"],
+            status_message = status_message,
         )
 def main():
     app = QApplication(sys.argv)
