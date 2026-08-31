@@ -1,12 +1,12 @@
 import json
 import csv
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget, QDialog, QFileDialog
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, QAbstractItemView, QTextEdit, QTabWidget, QDialog, QFileDialog, QMessageBox
 from PySide6.QtCore import QThread
 from generator import constants
 from storage.database import init_db
 from storage.repository import get_recent_runs, get_run_summary
-from ai.ollama_client import MODEL as AI_MODEL
+from ai.ollama_client import MODEL as AI_MODEL, is_ollama_available
 from ui.workers import TestWorker, SpecAnalysisWorker, RunAnalysisWorker
 from ui.dialogs import CategorySelectionDialog
 from analyzer.run_comparison import compare_run_issues
@@ -47,6 +47,9 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("Ready!")
         self.summary_label = QLabel("No run yet!")
         self.run_type_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        self.summary_label.setWordWrap(True)  
+        self.run_type_label.setWordWrap(True) 
         self.deterministic_selection_label = QLabel(f"{len(self.selected_deterministic_categories)} categories selected")
         self.ai_selection_label = QLabel(f"{len(self.selected_ai_categories)} categories selected")
 
@@ -198,6 +201,7 @@ class MainWindow(QMainWindow):
         history_layout = QVBoxLayout()
 
         self.history_summary_label = QLabel("Select a run to view details")
+        self.history_summary_label.setWordWrap(True)
         font = self.history_summary_label.font()
         font.setBold(True)
         font.setPointSize(font.pointSize() + 1)
@@ -322,7 +326,7 @@ class MainWindow(QMainWindow):
         self.run_analysis_label.setFont(run_analysis_font)
 
         self.analyze_selected_run_label = QLabel("No history run selected.")
-
+        self.analyze_selected_run_label.setWordWrap(True)
         self.analyze_run_button = QPushButton("Analyze selected run")
 
         self.run_analysis_output = QTextEdit()
@@ -368,7 +372,8 @@ class MainWindow(QMainWindow):
             base_url = self.base_url_input.text().strip().rstrip("/")
 
         if not base_url:
-            self.status_label.setText("Please enter an API base URL!")
+            QMessageBox.warning(self,"Tests start blocked","Please enter an API base URL first.",)
+            self.status_label.setText("Please enter an API base URL first.")
             return
 
         self.run_button.setEnabled(False)
@@ -429,7 +434,12 @@ class MainWindow(QMainWindow):
 
 
     def handle_run_clicked(self):
+        if not self.base_url_input.text().strip():
+            QMessageBox.warning(self,"Tests start blocked","Please enter an API base URL first.",)
+            self.status_label.setText("Please enter an API base URL first.")
+            return
         if not self.selected_deterministic_categories:
+            QMessageBox.warning(self,"Tests start blocked","Please select at least one deterministic test category.",)
             self.status_label.setText("Please select at least one deterministic test category.")
             return
         
@@ -437,9 +447,20 @@ class MainWindow(QMainWindow):
 
 
     def handle_ai_run_clicked(self):
+        if not self.base_url_input.text().strip():
+            QMessageBox.warning(self,"Tests start blocked","Please enter an API base URL first.",)
+            self.status_label.setText("Please enter an API base URL first.")
+            return
         if not self.selected_ai_categories:
+            QMessageBox.warning(self,"Tests start blocked","Please select at least one AI test category.",)
             self.status_label.setText("Please select at least one AI test category.")
             return
+
+        if not is_ollama_available():
+            QMessageBox.warning(self,"Tests start blocked","AI tests blocked: Ollama is not available.",)
+            self.status_label.setText("AI tests blocked: Ollama is not available.")
+            return
+
         self.start_test_run(category_filter=self.selected_ai_categories, ai_enabled=True, ai_model=AI_MODEL)
 
 
@@ -708,6 +729,7 @@ class MainWindow(QMainWindow):
     def handle_export_run(self):
         run_id = self.get_selected_history_run_id()
         if run_id is None:
+            QMessageBox.warning(self,"Export blocked","Select a history run before exporting.",)
             self.history_summary_label.setText("Select a history run before exporting.")
             return
 
@@ -715,6 +737,7 @@ class MainWindow(QMainWindow):
         run = run_summary["run"]
 
         if run is None:
+            QMessageBox.warning(self,"Export blocked","Selected run no longer exists.",)
             self.history_summary_label.setText("Selected run no longer exists.")
             return
 
@@ -818,9 +841,12 @@ class MainWindow(QMainWindow):
                 self.history_summary_label.setText("Unsupported export format.")
                 return
         except OSError as exc:
-            self.history_summary_label.setText(f"Failed to export run #{run.id}: {exc}")
+            message = f"Failed to export run #{run.id}: {exc}"
+            QMessageBox.warning(self,"Export blocked",message,)
+            self.history_summary_label.setText(message)
             return
 
+        QMessageBox.warning(self,"Export blocked",f"Run #{run.id} exported successfully as {export_format}",)
         self.history_summary_label.setText(f"Run #{run.id} exported successfully as {export_format}.")
 
 
@@ -845,6 +871,7 @@ class MainWindow(QMainWindow):
         run_id = self.get_selected_history_run_id()
 
         if run_id is None:
+            QMessageBox.warning(self,"Compare blocked","Select a history run first",)
             self.history_summary_label.setText("Select a history run first.")
             return
 
@@ -855,6 +882,7 @@ class MainWindow(QMainWindow):
         run_id = self.get_selected_history_run_id()
 
         if run_id is None:
+            QMessageBox.warning(self,"Compare blocked","Select a history run first",)
             self.history_summary_label.setText("Select a history run first.")
             return
 
@@ -864,24 +892,45 @@ class MainWindow(QMainWindow):
     def handle_compare_runs(self):
 
         if self.run_a_id is None:
+            QMessageBox.warning(self,"Compare blocked","Select Run A before comparing.",)
             self.history_summary_label.setText("Select Run A before comparing.")
             return
         if self.run_b_id is None:
+            QMessageBox.warning(self,"Compare blocked","Select Run B before comparing.",)
             self.history_summary_label.setText("Select Run B before comparing.")
             return
 
         if self.run_a_id  == self.run_b_id:
+            QMessageBox.warning(self,"Compare blocked","Run A and Run B must be different.",)
             self.history_summary_label.setText("Run A and Run B must be different.")
             return
-        
+
+        run_a_summary = get_run_summary(self.run_a_id)
+        run_b_summary = get_run_summary(self.run_b_id)    
+
+        run_a = run_a_summary["run"]
+        run_b = run_b_summary["run"]
+
+        if run_a is None or run_b is None:
+            QMessageBox.warning(self,"Compare blocked","One of the selected runs no longer exists",)
+            self.history_summary_label.setText("One of the selected runs no longer exists.")
+            return            
+
+        if run_a.base_url != run_b.base_url:
+            QMessageBox.warning(self,"Compare blocked","Cannot compare runs from different target URLs.",)
+            self.history_summary_label.setText("Run A and Run B must use the same target URL.")
+            return 
+
         run_a_type = self.get_run_type_label(self.run_a_id)
         run_b_type = self.get_run_type_label(self.run_b_id)
 
         if run_a_type is None or run_b_type is None:
+            QMessageBox.warning(self,"Compare blocked","One of the selected runs no longer exists.",)
             self.history_summary_label.setText("One of the selected runs no longer exists.")
             return
 
         if run_a_type != run_b_type:
+            QMessageBox.warning(self,"Compare blocked","Run A and Run B must be of the same type (Deterministic or AI)",)
             self.history_summary_label.setText("Run A and Run B must be of the same type (Deterministic or AI).")
             return
         
@@ -889,10 +938,12 @@ class MainWindow(QMainWindow):
         run_b_categories = self.get_run_selected_categories(self.run_b_id)
 
         if run_a_categories is None or run_b_categories is None:
+            QMessageBox.warning(self,"Compare blocked","Cannot compare these runs because selected categories were not recorded for one or both runs.",)
             self.history_summary_label.setText("Cannot compare these runs because selected categories were not recorded for one or both runs.")
             return
 
         if run_a_categories != run_b_categories:
+            QMessageBox.warning(self,"Compare blocked","Run A and Run B must use the same selected test categories.",)
             self.history_summary_label.setText("Run A and Run B must use the same selected test categories.")
             return
         
@@ -902,6 +953,7 @@ class MainWindow(QMainWindow):
         issues_b = self.get_historical_run_issues(self.run_b_id)
 
         if issues_a is None or issues_b is None:
+            QMessageBox.warning(self,"Compare blocked","One of the selected runs no longer exists.",)
             self.history_summary_label.setText("One of the selected runs no longer exists.")
             return
         
@@ -991,7 +1043,7 @@ class MainWindow(QMainWindow):
             return None, "Selected run no longer exists."
 
         if run.seed is None:
-            return None, "Cannot re-run this histroy run because its seed was not recorded."
+            return None, "Cannot re-run this history run because its seed was not recorded."
 
         if run.selected_categories is None:
             return None, "Cannot re-run this history run because its selected categories were not recorded."
@@ -1059,7 +1111,8 @@ class MainWindow(QMainWindow):
         base_url = self.base_url_input.text().strip().rstrip("/")
 
         if not base_url:
-            self.spec_analysis_output.setPlainText("Please enter an API base url first.")
+            QMessageBox.warning(self,"Analyze blocked","Please enter an API base URL first.",)
+            self.spec_analysis_output.setPlainText("Please enter an API base URL first.")
             return
 
         self.analyze_spec_button.setEnabled(False)
@@ -1104,6 +1157,7 @@ class MainWindow(QMainWindow):
     def handle_analyze_run(self):
 
         if self.selected_analysis_run_id is None:
+            QMessageBox.warning(self,"Tests start blocked","Select a history run first",)
             self.run_analysis_output.setPlainText("Select a history run first.")
             return
 
@@ -1157,12 +1211,14 @@ class MainWindow(QMainWindow):
         run_id = self.get_selected_history_run_id()
 
         if run_id is None:
+            QMessageBox.warning(self,"Re-run blocked","Select a history run before re-running.",)
             self.history_summary_label.setText("Select a history run before re-running.")
             return
 
         config, error = self.get_saved_run_config(run_id)
 
         if error is not None:
+            QMessageBox.warning(self,"Re-run blocked",error,)
             self.history_summary_label.setText(error)
             return
 

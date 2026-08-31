@@ -24,22 +24,11 @@ def query_ollama(prompt: str, timeout: int = 30, model:str | None = None, json_m
         print(f"[AI] Ollama unavailable: {e}")
         return None
 
-    # try:
-    #     response = requests.post(OLLAMA_URL, json = {
-    #         "model": model or MODEL,
-    #         "prompt": prompt,
-    #         "stream": False,
-    #         "format": "json",
-    #         "options": {"temperature":0}
-    #         }, timeout=timeout)
 
-    #     if json_mode:
-    #         payload["format"]
-
-    #     response.raise_for_status()
-    #     return response.json()["response"]
-    # except requests.exceptions.RequestException as e:
-    #     print(f"[AI] Ollama unavailable: {e}")
-    #     return None
-
-    
+def is_ollama_available(timeout: int = 3) ->bool:
+    try:
+        response = requests.get("http://localhost:11434/api/tags",timeout = timeout)
+        response.raise_for_status()
+        return True
+    except requests.RequestException:
+        return False
