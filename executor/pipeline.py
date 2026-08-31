@@ -244,8 +244,22 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             #put_id_sync = prepare_put_id_sync(base_url,endpoint,schema,path_param_schema,)
             if category_filter is None or constants.AI_IMPLICIT_CONSTRAINT_VIOLATION in category_filter or constants.AI_IMPLICIT_CONSTRAINT_VALID in category_filter:
-
-                for ai_case in generate_ai_constraint_cases(schema):
+                ai_cases = generate_ai_constraint_cases(schema)
+                generate_ai_categories= {case["category"] for case in ai_cases}
+                for ai_category in (constants.AI_IMPLICIT_CONSTRAINT_VIOLATION, constants.AI_IMPLICIT_CONSTRAINT_VALID):
+                    if category_filter is not None and ai_category not in category_filter:
+                        continue
+                    if ai_category not in generate_ai_categories:
+                        all_skipped.append({
+                            "path": endpoint["path"],
+                            "method": endpoint["method"],
+                            "category": ai_category,
+                            "reason": "No applicable AI implicit constraint test case was produced for this schema.",
+                        })
+                    
+                for ai_case in ai_cases:
+                    if category_filter is not None and ai_case["category"] not in category_filter:
+                        continue
                     ai_put_setup = None
                     if endpoint["method"] == "PUT":
                         ai_put_setup = create_resource_for_put_test(base_url, spec, endpoints, endpoint)
@@ -295,6 +309,13 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                   
             if category_filter is None or constants.AI_CROSS_FIELD_VIOLATION in category_filter:
                 cross_case = generate_cross_field_case(schema)
+                if cross_case is None:
+                    all_skipped.append({
+                        "path": endpoint["path"],
+                        "method": endpoint["method"],
+                        "category": constants.AI_CROSS_FIELD_VIOLATION,
+                        "reason": "No applicable AI cross-field constraint test case was produced for this schema.",
+                    })
                 if cross_case:
                     cross_put_setup = None
                     if endpoint["method"] == "PUT":
