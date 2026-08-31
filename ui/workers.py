@@ -13,17 +13,19 @@ class TestWorker(QObject):
     finished = Signal(object)
     failed = Signal(str)
 
-    def __init__(self,base_url:str, category_filter: list[str], ai_enabled: bool, ai_model: str | None = None):
+    def __init__(self,base_url:str, category_filter: list[str], ai_enabled: bool, ai_model: str | None = None, seed: int | None = None):
         super().__init__()
         self.base_url = base_url
         self.category_filter = category_filter
         self.ai_enabled = ai_enabled
         self.ai_model = ai_model
+        self.seed = seed
 
     @Slot()
     def run(self):
         try:
-            run_seed = random.SystemRandom().randint(0, 2**32 - 1)
+
+            run_seed = self.seed if self.seed is not None else random.SystemRandom().randint(0, 2**32 - 1)
             started_at = time.perf_counter()
 
             results, skipped = run_all_tests(self.base_url, category_filter=self.category_filter, seed=run_seed)

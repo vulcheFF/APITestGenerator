@@ -172,7 +172,7 @@ class MainWindow(QMainWindow):
 
         #history table
         self.history_table = QTableWidget()
-        self.history_table.setColumnCount(8)
+        self.history_table.setColumnCount(9)
         self.history_table.setHorizontalHeaderLabels([
             "Run ID",
             "Timestamp",
@@ -181,7 +181,8 @@ class MainWindow(QMainWindow):
             "Total",
             "Passed",
             "Issues",
-            "Duration[ms]"
+            "Duration[ms]",
+            "Seed",
         ])
 
         self.history_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -211,6 +212,8 @@ class MainWindow(QMainWindow):
         self.set_run_b_button = QPushButton("Set as Run B")
         self.compare_runs_button = QPushButton("Compare runs")
 
+        self.rerun_run_button = QPushButton("Re-run selected run")   
+
         #export button
         self.export_run_button = QPushButton("Export selected run...")
 
@@ -218,6 +221,7 @@ class MainWindow(QMainWindow):
         self.set_run_a_button.clicked.connect(self.handle_set_run_a)
         self.set_run_b_button.clicked.connect(self.handle_set_run_b)
         self.compare_runs_button.clicked.connect(self.handle_compare_runs)
+        self.rerun_run_button.clicked.connect(self.handle_rerun_run)
         self.export_run_button.clicked.connect(self.handle_export_run)
 
         history_layout.addWidget(self.history_summary_label)
@@ -227,6 +231,7 @@ class MainWindow(QMainWindow):
         history_layout.addWidget(self.set_run_a_button)
         history_layout.addWidget(self.set_run_b_button)
         history_layout.addWidget(self.compare_runs_button)
+        history_layout.addWidget(self.rerun_run_button)
         history_layout.addWidget(self.export_run_button)
 
         history_layout.addWidget(self.history_table)
@@ -356,10 +361,11 @@ class MainWindow(QMainWindow):
         self.populate_history_table()
 
 
-    def start_test_run(self, category_filter, ai_enabled, ai_model = None):
-
-        base_url = self.base_url_input.text().strip().rstrip("/")
-        
+    def start_test_run(self, category_filter, ai_enabled, ai_model = None, seed = None, base_url_override = None):
+        if base_url_override:
+            base_url = base_url_override.strip().rstrip("/")
+        else:
+            base_url = self.base_url_input.text().strip().rstrip("/")
 
         if not base_url:
             self.status_label.setText("Please enter an API base URL!")
@@ -400,7 +406,7 @@ class MainWindow(QMainWindow):
         self.summary_label.setText("")
 
         self.thread = QThread()
-        self.worker = TestWorker(base_url, category_filter=category_filter, ai_enabled=ai_enabled,ai_model=ai_model)
+        self.worker = TestWorker(base_url, category_filter=category_filter, ai_enabled=ai_enabled,ai_model=ai_model,seed=seed)
 
         self.worker.moveToThread(self.thread)
 
@@ -572,7 +578,7 @@ class MainWindow(QMainWindow):
             self.ai_selection_label.setText(f"{len(self.selected_ai_categories)} categories selected")
 
     def populate_history_table(self):
-        runs = get_recent_runs(limit=20)
+        runs = get_recent_runs(limit=50)
 
         self.history_table.setRowCount(len(runs))
 
@@ -588,6 +594,7 @@ class MainWindow(QMainWindow):
                 run.passed_count,
                 run.issues_found,
                 run.duration_ms,
+                run.seed,
             ]
 
             for column, value in enumerate(values):
@@ -972,6 +979,49 @@ class MainWindow(QMainWindow):
         except (json.JSONDecodeError, TypeError):
             return None
 
+    def get_run_selected_categories(self, run_id):
+        run_summary = get_run_summary(run_id)
+        run = run_summary["run"]
+
+        if run is None:
+            return None
+
+        if run.seleceted_categories is None:
+            return None
+
+        try:
+            return set(json.loads(run.selected_categories))
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    def get_saved_run_config(self, run_id):
+        run_summary = get_run_summary(run_id)
+        run = run_summary["run"]
+
+        if run is None:
+            return None, "Selected run no longer exists."
+
+        if run.seed is None:
+            return None, "Cannot re-run this histroy run because its seed was not recorded."
+
+        if run.selected_categories is None:
+            return None, "Cannot re-run this history run because its selected categories were not recorded."
+
+        if run.ai_enabled and run.ai_model is None:
+            return None, "Cannot re-run history AI run because its AI model was not recorded."
+        try:
+            selected_categories = json.loads(run.selected_categories)
+        except (json.JSONDecodeError, TypeError):
+            return None, "Cannot re-run this history run because its saved category configuration is invalid."
+
+        return {
+            "base_url": run.base_url,
+            "seed": run.seed,
+            "selected_categories": selected_categories,
+            "ai_enabled": run.ai_enabled,
+            "ai_model": run.ai_model,
+        }, None
+
     def handle_comparison_issue_selected(self, row, column):
         table = self.sender()
 
@@ -1108,6 +1158,34 @@ class MainWindow(QMainWindow):
         self.run_analysis_thread = None
         self.run_analysis_worker = None
 
+    def handle_rerun_run(self):
+        run_id = self.get_selected_history_run_id()
+
+        if run_id is None:
+            self.history_summary_label.setText("Select a history run before re-running.")
+            return
+
+        config, error = self.get_saved_run_config(run_id)
+
+        if error is not None:
+            self.history_summary_label.setText(error)
+
+        self.base_url_input.setText(config["base_url"])
+
+        self.main_tabs.setCurrentIndex(0)
+
+        if config["ai_enabled"]:
+            self.status_label.setText("Re-runing saved AI configuration. AI-assisted results are best-effort reproducible")
+        else:
+            self.status_label.setText("Re-runing saved deterministic configuration.")
+
+        self.start_test_run(
+            category_filter=config["selected_categories"],
+            ai_enabled=config["ai_enabled"],
+            ai_model=config["ai_model"],
+            seed=config["seed"],
+            base_url_override=config["base_url"],
+        )
 def main():
     app = QApplication(sys.argv)
 
