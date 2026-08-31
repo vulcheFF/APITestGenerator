@@ -638,15 +638,15 @@ def get_skipped_query_categories(query_params: list[dict]) -> list[dict]:
     if not required_params:
         skipped.append({
             "category": constants.MISSING_REQUIRED_QUERY_PARAM,
-            "reason": "No required query paramters declared"
+            "reason": "No required query parameters declared"
         })
         skipped.append({
             "category": constants.INVALID_QUERY_PARAM_VALUE,
-            "reason": "No required query paramters declared"
+            "reason": "No required query parameters declared"
         })
         skipped.append({
             "category": constants.INVALID_QUERY_PARAM_ENUM,
-            "reason": "No required query paramters declared"
+            "reason": "No required query parameters declared"
         })
         return skipped
 
@@ -654,14 +654,14 @@ def get_skipped_query_categories(query_params: list[dict]) -> list[dict]:
     if not has_non_string_type:
         skipped.append({
             "category": constants.INVALID_QUERY_PARAM_VALUE,
-            "reason": "All required quiry param are string-type - no missmatch possible"
+            "reason": "All required quiry parameters are string-type - no missmatch possible"
         })
 
     has_query_enum = any("enum" in (p["schema"].get("items",{}) if p["schema"].get("type") == "array" else p["schema"]) for p in required_params)
     if not has_query_enum:
         skipped.append({
             "category": constants.INVALID_QUERY_PARAM_ENUM,
-            "reason": "No required query param(or its array items) has 'enum' declared"
+            "reason": "No required query parameters(or its array items) has 'enum' declared"
         })
     return skipped
                 

@@ -439,8 +439,9 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
             expected_success_status = (min(success_codes) if success_codes else 200)
             acceptable_success_statuses = (sorted(success_codes) if success_codes else [200])           
 
-            if category_filter is None or constants.LIST_ENDPOINT in category_filter:
-                if required_params:
+            
+            if required_params:
+                if category_filter is None or constants.LIST_ENDPOINT in category_filter:
                     #valid req - valid values for req params
                     valid_query = {
                         p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params
@@ -455,8 +456,9 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["expected_status"] = expected_success_status
                     result["acceptable_statuses"] = acceptable_success_statuses
                     result["description"] = "Get list endpoint with required query params"
-                    results.append(result)
+                    results.append(result)          
 
+                if category_filter is None or constants.MISSING_REQUIRED_QUERY_PARAM in category_filter:
                     #invalid - without req params
                     for missing_param in required_params:
                         partial_query = {
@@ -473,6 +475,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         result["description"] = f"Missing required query param '{missing_param["name"]}'"
                         results.append(result)
 
+                if category_filter is None or constants.INVALID_QUERY_PARAM_VALUE in category_filter:
                     #Invalid value for each required parameter individually
                     for target_param in required_params:
                         target_schema = target_param["schema"]
@@ -501,6 +504,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         result["description"] = f"Invalid type for query param '{target_param["name"]}'"
                         results.append(result)
 
+                if category_filter is None or constants.INVALID_QUERY_PARAM_ENUM in category_filter:
                     for enum_param in required_params:
                         param_schema = enum_param["schema"]
                         enum_source = param_schema.get("items", {}) if param_schema.get("type") == "array" else param_schema
@@ -521,7 +525,8 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         result["expected_status"] = 422
                         result["description"] = f"Value outside enum list for query param '{enum_param["name"]}'"
                         results.append(result)
-                else:
+            else:
+                if category_filter is None or constants.LIST_ENDPOINT in category_filter:
                     #no req params
                     result = execute_test(base_url, endpoint["method"], endpoint["path"], data=None)
                     result = attach_schema_conformance(result, spec, endpoint)
@@ -533,14 +538,14 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["acceptable_statuses"] = acceptable_success_statuses
                     result["description"] = "Get list endpoint (no filters)"
                     results.append(result)
-                for skipped in get_skipped_query_categories(query_params):
-                    if category_filter is not None and skipped["category"] not in category_filter:
-                        continue
-                    all_skipped.append({
-                        "path": endpoint["path"],
-                        "method": endpoint["method"],
-                        **skipped,
-                    })
+            for skipped in get_skipped_query_categories(query_params):
+                if category_filter is not None and skipped["category"] not in category_filter:
+                    continue
+                all_skipped.append({
+                    "path": endpoint["path"],
+                    "method": endpoint["method"],
+                    **skipped,
+                })
                     
         if endpoint["method"] in ("GET", "DELETE") and "{" in endpoint["path"]:
 
