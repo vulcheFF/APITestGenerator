@@ -557,7 +557,7 @@ def get_skipped_categories(schema: dict) -> list[dict]:
     if not has_numeric_without_minimum:
         skipped.append({
             "category": constants.NEGATIVE_VALUE,
-            "reason": "All numeric fields already have 'minnimum'/'exclusiveMinimum' decalred or no numeric fields exist in the schema",
+            "reason": "All numeric fields already have 'minnimum'/'exclusiveMinimum' declared or no numeric fields exist in the schema",
         })    
     
     if not any("enum" in p for p in properties.values()):
@@ -583,7 +583,7 @@ def get_skipped_categories(schema: dict) -> list[dict]:
     if not has_array_items_type:
         skipped.append({
             "category": constants.INVALID_ARRAY_ITEM_TYPE,
-            "reason": "No array field has 'items' with decalred type in the schema"
+            "reason": "No array field has 'items' with declared type in the schema"
         })
 
     has_array_bounds = (schema.get("type") == "array" and (schema.get("minItems") is not None or schema.get("maxItems") is not None)) or any(p.get("type")=="array" and (p.get("minItems") is not None or p.get("maxItems") is not None) for p in properties.values())
