@@ -232,7 +232,22 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             mass_assignment_case = generate_mass_assignment_case(schema)
             if mass_assignment_case and (category_filter is None or constants.MASS_ASSIGNMENT in category_filter):
-                result = execute_test(base_url, endpoint["method"], filled_path, mass_assignment_case["data"])
+                mass_assignment_setup = None
+                test_path = filled_path
+                if endpoint["method"] =="PUT":
+                    mass_assignment_setup = create_resource_for_put_test(base_url, spec, endpoints, endpoint)
+                    if mass_assignment_setup is not None:
+                        test_path = mass_assignment_setup["path"]
+                        id_field = mass_assignment_setup["id_field"]
+                        if(isinstance(mass_assignment_case["data"],dict) and id_field in mass_assignment_case["data"]):
+                            mass_assignment_case["data"][id_field] = mass_assignment_setup["id"]
+
+
+                result = execute_test(base_url, endpoint["method"], test_path, mass_assignment_case["data"])
+
+                if mass_assignment_setup is not None:
+                    cleanup_created_resource(base_url, endpoints, mass_assignment_setup["resource_path"], mass_assignment_setup["id"],)
+
                 result = attach_schema_conformance(result, spec, endpoint)
                 result = attach_template_path(result, endpoint)
                 result["test_type"] = "invalid"
@@ -241,6 +256,9 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["expected_status"] = mass_assignment_case["expected_status"]
                 result["description"] = mass_assignment_case["description"]
                 results.append(result)
+
+                if endpoint["method"] == "POST":
+                    cleanup_if_unexpectedly_succeeded(base_url, endpoints, endpoint, result, schema)
 
             #put_id_sync = prepare_put_id_sync(base_url,endpoint,schema,path_param_schema,)
             if category_filter is None or constants.AI_IMPLICIT_CONSTRAINT_VIOLATION in category_filter or constants.AI_IMPLICIT_CONSTRAINT_VALID in category_filter:
@@ -413,7 +431,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
                 
         if endpoint["method"] == "GET" and "{" not in endpoint["path"]:
-            query_params = get_query_params_schema(endpoint)
+            query_params = get_query_params_schema(spec, endpoint)
             required_params = [p for p in query_params if p["required"]]
            # expected_success_status = get_expected_success_status(endpoint) or 200
             success_codes = get_success_status_codes(endpoint)
@@ -686,7 +704,31 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
             "error": "Setup failed",
         }
 
-    create_id = create_result["response_body"].get("id", create_data.get("id"))
+
+    
+    response_body = create_result.get("response_body")
+
+    if isinstance(response_body, dict):
+        create_id = response_body.get("id", create_data.get("id"))
+    else:
+        create_id = create_data.get("id")
+
+    if create_id is None:
+        return {
+            "category": constants.DELETE_IDEMPOTENCY,
+            "field": None,
+            "expected_status": None,
+            "description": "Setup POST succeded, but no resource ID could be determined; cannot test DELETE idempotency",
+            "status_code": create_result.get("status_code"),
+            "test_type": "sequence",
+            "method": "DELETE",
+            "path": delete_endpoint["path"],
+            "template_path": delete_endpoint["path"],
+            "response_body": response_body,
+            "error": "Missing resource ID after setup",
+
+        }
+
     test_path = fill_path_params_with_value(delete_endpoint["path"], str(create_id))
     first_delete = execute_test(base_url, "DELETE", test_path, data=None)
     #print("DEBUG: first_delete status:", first_delete["status_code"], "body:", first_delete.get("response_body"))
@@ -744,7 +786,15 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
             "error": "Setup failed",
         }  
 
-    created_id = create_result["response_body"].get(id_field, create_data.get(id_field)) if id_field else None
+    #created_id = create_result["response_body"].get(id_field, create_data.get(id_field)) if id_field else None
+    response_body = create_result.get("response_body")
+    if id_field and isinstance(response_body, dict):
+        created_id  = response_body.get(id_field, create_data.get(id_field))
+    elif id_field:
+        created_id  = create_data.get(id_field)
+    else:
+        created_id = None
+
     path_param_schema = get_path_param_schema(put_endpoint)
     test_path = fill_path_params_with_value(put_endpoint["path"], str(created_id)) if created_id else fill_path_params(put_endpoint["path"], path_param_schema)
 

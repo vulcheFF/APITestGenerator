@@ -78,7 +78,7 @@ def analyze_run_with_ai(run_text: str) -> str:
 
     {run_text}
     """
-    response = query_ollama(prompt, timeout=60)
+    response = query_ollama(prompt, timeout=120, json_mode=False)
 
     if response is None:
         return("AI analysis could not be completed because Ollama is unavailable")

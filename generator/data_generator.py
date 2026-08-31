@@ -172,8 +172,8 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
             })
 
         #max items
-        max_items = schema.get("maxItems")
-        if min_items is not None:
+        
+        if max_items is not None:
             test_cases.append({
                 "category": constants.ARRAY_BOUNDARY,
                 "field": None,
@@ -448,7 +448,21 @@ def generate_ai_constraint_cases(schema: dict, put_id_sync: dict | None = None, 
 
     properties = schema.get("properties", {})
     test_cases = []
-    field_items = list(properties.items())
+
+    field_names = set(properties.keys())
+
+    field_items = []
+
+    for field_name, field_schema in properties.items():
+        description = str(field_schema.get("description") or "").lower()
+
+        mentions_other_field = any(other_name != field_name and other_name.lower() in description for other_name in field_names)
+
+        if mentions_other_field:
+            continue
+
+        field_items.append((field_name, field_schema))
+
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         ai_results = list(executor.map(lambda item: (item[0], mine_implicit_constraint(item[0], item[1], ai_model=ai_model)), field_items))

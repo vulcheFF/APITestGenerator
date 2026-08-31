@@ -86,7 +86,7 @@ def analyze_spec_with_ai(overview_text: str) -> str:
     {overview_text}
     """
 
-    response = query_ollama(prompt, timeout=60,)
+    response = query_ollama(prompt, timeout=60, json_mode=False,)
 
     if response is None:
         return("AI analysis could not be completed because Ollama is unavailable.")

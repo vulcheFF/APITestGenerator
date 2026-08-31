@@ -156,15 +156,20 @@ def get_path_params_schema(endpoint: dict) -> list[dict]:
             
     return path_params
 
-def get_query_params_schema(endpoint: dict) -> list[dict]:
+def get_query_params_schema(spec: dict, endpoint: dict) -> list[dict]:
     query_params = []
     for param in endpoint.get("parameters", []):
-        if param.get("in") == "query":
-            query_params.append({
-                "name": param.get("name"),
-                "required": param.get("required", False),
-                "schema": param.get("schema", {}),
-            })
+        if param.get("in") != "query":
+            continue
+        param_schema = param.get("schema", {})
+        resolved_schema = resolve_all_refs(spec, param_schema)
+
+        query_params.append({
+            "name": param.get("name"),
+            "required": param.get("required", False),
+            "schema": resolved_schema,
+        })
+
     return query_params
 
 

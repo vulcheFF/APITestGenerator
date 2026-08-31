@@ -190,6 +190,22 @@ def mine_implicit_constraint(field_name: str, field_schema: dict, ai_model: str 
 
         8. If the evidence is weak, ambiguous, stylistic, domain-assumptive, or
         already covered by the schema, return has_implicit_constraint=false.
+        
+        9. The suggested valid_example MUST satisfy the additional implicit
+        constraint you identified.
+
+        10. The suggested invalid_example MUST violate the additional implicit
+        constraint you identified.
+
+        11. Before returning the JSON, internally verify that:
+        - valid_example satisfies the implicit constraint;
+        - invalid_example violates the implicit constraint;
+        - both examples still satisfy all formally declared OpenAPI/JSON Schema
+        constraints;
+        - the examples have the correct declared JSON type.
+
+        12. If you cannot provide examples that satisfy all of the above
+        requirements with high confidence, return has_implicit_constraint=false.
 
         Return ONLY valid JSON in this exact structure:
 

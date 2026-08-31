@@ -375,7 +375,7 @@ class MainWindow(QMainWindow):
         self.ai_run_button.setEnabled(False)
         self.selected_deterministic_button.setEnabled(False)
         self.selected_ai_button.setEnabled(False)
-
+        self.rerun_run_button.setEnabled(False)
         self.current_run_is_ai = ai_enabled
 
         if ai_enabled:
@@ -444,6 +444,7 @@ class MainWindow(QMainWindow):
 
 
     def handle_run_finished(self, run_data):
+        
         self.result_tabs.setTabText(2,"Skipped")
         analysis = run_data["analysis"]
 
@@ -465,6 +466,7 @@ class MainWindow(QMainWindow):
         self.ai_run_button.setEnabled(True)
         self.selected_deterministic_button.setEnabled(True)
         self.selected_ai_button.setEnabled(True)
+        self.rerun_run_button.setEnabled(True)
 
 
     def handle_run_failed(self, error_message):
@@ -475,6 +477,7 @@ class MainWindow(QMainWindow):
         self.ai_run_button.setEnabled(True)
         self.selected_deterministic_button.setEnabled(True)
         self.selected_ai_button.setEnabled(True)
+        self.rerun_run_button.setEnabled(True)
         
 
     def cleanup_thread(self):
@@ -639,7 +642,7 @@ class MainWindow(QMainWindow):
         )
 
         if run.ai_enabled:
-            self.run_type_label.setText(f" Historical AI-Assited run #{run.id} - heuristic findings")
+            self.run_type_label.setText(f" Historical AI-Assisted run #{run.id} - heuristic findings")
             self.result_tabs.setTabText(0, "AI Issues")
             self.result_tabs.setTabText(1, "AI Passed")
         else:
@@ -979,20 +982,6 @@ class MainWindow(QMainWindow):
         except (json.JSONDecodeError, TypeError):
             return None
 
-    def get_run_selected_categories(self, run_id):
-        run_summary = get_run_summary(run_id)
-        run = run_summary["run"]
-
-        if run is None:
-            return None
-
-        if run.seleceted_categories is None:
-            return None
-
-        try:
-            return set(json.loads(run.selected_categories))
-        except (json.JSONDecodeError, TypeError):
-            return None
 
     def get_saved_run_config(self, run_id):
         run_summary = get_run_summary(run_id)
@@ -1007,12 +996,18 @@ class MainWindow(QMainWindow):
         if run.selected_categories is None:
             return None, "Cannot re-run this history run because its selected categories were not recorded."
 
+        if run.ai_enabled is None:
+            return None, "Cannot re-run this history run because its run type was not recorded."
+
         if run.ai_enabled and run.ai_model is None:
             return None, "Cannot re-run history AI run because its AI model was not recorded."
         try:
             selected_categories = json.loads(run.selected_categories)
         except (json.JSONDecodeError, TypeError):
             return None, "Cannot re-run this history run because its saved category configuration is invalid."
+
+        if not isinstance(selected_categories, list):
+            return None, "Cannot re-run this history run because its saved category configuration is invalid"
 
         return {
             "base_url": run.base_url,
