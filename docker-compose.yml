@@ -1,0 +1,28 @@
+services:
+  buggy-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+    command:
+      - uvicorn
+      - demo_api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    ports:
+      - "8000:8000"
+
+  clean-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+    command:
+      - uvicorn
+      - demo_api_clean.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+    ports:
+      - "8001:8001"
