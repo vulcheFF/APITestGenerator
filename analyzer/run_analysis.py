@@ -41,9 +41,11 @@ def build_run_analysis_text(run, issues: list[dict], passed: list[dict]) -> str:
             path = result.get("template_path") or result.get("path")
 
             lines.append(
+                f"- PASS | "
                 f"- {result.get('method')} {path} | "
                 f"category={result.get('category')} | "
                 f"field={result.get('field') or 'N/A'} | "
+                 f"expected={result.get('expected_status')} | "
                 f"actual={result.get('status_code')} | "
                 f"description={result.get('description', '')}"
                 
@@ -58,6 +60,15 @@ def analyze_run_with_ai(run_text: str) -> str:
     Based only on the run summary below, provide a concise technical analysis.
 
     Important rules:
+    - The "Issues" section contains failed tests and actual detected problems.
+    - The "Passed results" section contains successful tests and MUST NOT be
+    interpreted as API defects.
+    - A 4xx or 5xx response is not automatically an issue.
+    - Negative tests are successful when the actual response matches the expected
+    rejection behavior.
+    - Never recommend fixing behavior that appears only in Passed results.
+    - If the Issues section says "- None", explicitly state that no API defects
+    were detected by this run.
     - Treat deterministic schema-based findings as stronger evidence.
     - Treat heuristic findings carefully, especially findings whose descriptions
     explicitly mention possible false positives or missing formal constraints.
