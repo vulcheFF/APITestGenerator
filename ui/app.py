@@ -692,6 +692,14 @@ class MainWindow(QMainWindow):
         self.analyze_selected_run_label.setText(f"Selected run: #{run.id} ({run_type})")
 
         duration = (f"{run.duration_ms} ms" if run.duration_ms is not None else "N/A")
+        selected_categories = []
+        if run.selected_categories is not None:
+            try:
+                selected_categories = json.loads(run.selected_categories)
+            except (json.JSONDecodeError, TypeError):
+                selected_categories = []
+
+        categories_text = ", ".join(selected_categories) if selected_categories else "N/A"
 
         self.history_summary_label.setText(
             f"Run #{run.id} | "
@@ -699,7 +707,8 @@ class MainWindow(QMainWindow):
             f"Total: {run.total_tests} | "
             f"Passed: {run.passed_count} | "
             f"Issues: {run.issues_found} | "
-            f"Duration: {duration}"
+            f"Duration: {duration}\n"
+            f"Categories ({len(selected_categories)}): {categories_text}"
         )
 
 
