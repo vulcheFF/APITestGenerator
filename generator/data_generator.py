@@ -172,7 +172,7 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
             })
 
         #max items
-        
+        max_items = schema.get("maxItems")
         if max_items is not None:
             test_cases.append({
                 "category": constants.ARRAY_BOUNDARY,
