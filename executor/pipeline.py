@@ -736,6 +736,18 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
 
     test_path = fill_path_params_with_value(delete_endpoint["path"], str(create_id))
     first_delete = execute_test(base_url, "DELETE", test_path, data=None)
+    first_delete_status = first_delete.get("status_code")
+    if first_delete_status is None or not (200 <=first_delete_status<300):
+        first_delete["category"] = constants.DELETE_IDEMPOTENCY
+        first_delete["field"] = None
+        first_delete["expected_status"] = 200
+        first_delete["test_type"] = "sequence"
+        first_delete["description"] = (
+            f"First DELETE failed during idempotency test "
+            f"(id={create_id}, status={first_delete_status})"
+        )
+        first_delete["template_path"] = delete_endpoint["path"]
+        return first_delete
     #print("DEBUG: first_delete status:", first_delete["status_code"], "body:", first_delete.get("response_body"))
     time.sleep(0.1)
     second_delete = execute_test(base_url, "DELETE", test_path, data=None)
@@ -745,7 +757,7 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
     second_delete["field"] = None
     second_delete["expected_status"] = 404
     second_delete["test_type"] = "sequence"
-    second_delete["description"] = (        f"Second DELETE on same result (id={create_id}) after successful first DELETE (first delete status:{first_delete['status_code']})")
+    second_delete["description"] = (f"Second DELETE on same result (id={create_id}) after successful first DELETE (first delete status:{first_delete['status_code']})")
     second_delete["template_path"] = delete_endpoint["path"]
     return second_delete
 
@@ -811,6 +823,32 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
         update_data[put_id_field] = int(created_id) if isinstance(created_id, int) else created_id
 
     first_put = execute_test(base_url, "PUT", test_path, update_data)
+    first_put_status = first_put.get("status_code")
+    if first_put_status is None or not (200 <= first_put_status < 300):
+        first_put["category"] = constants.PUT_IDEMPOTENCY
+        first_put["field"] = None
+        first_put["expected_status"] = (
+            min(get_success_status_codes(put_endpoint))
+            if get_success_status_codes(put_endpoint)
+            else 200
+        )
+        first_put["test_type"] = "sequence"
+        first_put["description"] = (
+            f"First PUT failed during idempotency test "
+            f"(id={created_id}, status={first_put_status})"
+        )
+        first_put["template_path"] = put_endpoint["path"]
+
+        if created_id is not None:
+            resource_path = re.sub(r"/\{[^}]+\}$", "", put_endpoint["path"])
+            cleanup_created_resource(
+                base_url,
+                endpoints,
+                resource_path,
+                created_id,
+            )
+
+        return first_put
     second_put = execute_test(base_url, "PUT", test_path, update_data)
 
     #both PUT should have same result
