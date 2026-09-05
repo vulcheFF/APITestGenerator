@@ -79,7 +79,10 @@ def _status_matches_expectation(actual_status, expected_status, acceptable_statu
 def is_test_passed(r: dict) -> bool:
     if r.get("error"):
         return False
-
+    
+    if r.get("schema_conformance_errors"):
+        return False
+    
     expected = r.get("expected_status")
     if expected is None:
         return True
@@ -87,9 +90,6 @@ def is_test_passed(r: dict) -> bool:
     if not _status_matches_expectation(r.get("status_code"), expected, r.get("acceptable_statuses")):
         return False
     
-    if r.get("schema_conformance_errors"):
-        return False
-
     return True
 
 def analyze_results(results: list[dict])-> dict:
@@ -128,7 +128,7 @@ def analyze_results(results: list[dict])-> dict:
                 "severity": "HIGH",
 
             })
-        elif not _status_matches_expectation(actual,expected):
+        elif not _status_matches_expectation(actual,expected,r.get("acceptable_statuses")):
             issues.append({
                 "method": r["method"],
                 "path": r["path"],

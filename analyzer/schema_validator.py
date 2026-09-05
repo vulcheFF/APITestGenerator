@@ -52,6 +52,11 @@ def validate_response_against_schema(response_body, schema: dict) -> list[str]:
             return [f"Expected object, got {type(response_body).__name__}"]
 
         properties = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            unexpected_fields = set(response_body) - set(properties)
+            for field_name in unexpected_fields:
+                errors.append(f"Unexpected field {field_name} in response while additionalProperties is false")
+
         for field_name, field_schema in properties.items():
             if field_name not in response_body:
                 if field_name in schema.get("required", []):

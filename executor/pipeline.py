@@ -122,6 +122,9 @@ def fill_path_params_with_values(path: str, values: dict[str, object],) -> str:
 
     return result
 
+def _generate_query_value(schema):
+    value = generate_valid_value(schema)
+    return "sample-value" if value is None else value
 
 def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = None, ai_model:str | None = None) -> tuple[list[dict], list[dict]]:
     if seed is not None:
@@ -459,7 +462,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 if category_filter is None or constants.LIST_ENDPOINT in category_filter:
                     #valid req - valid values for req params
                     valid_query = {
-                        p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params
+                        p["name"]: _generate_query_value(p["schema"]) for p in required_params
                     }
                     test_path = endpoint["path"] + build_query_string(valid_query)
                     result = execute_test(base_url, endpoint["method"], test_path, data=None)
@@ -477,7 +480,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     #invalid - without req params
                     for missing_param in required_params:
                         partial_query = {
-                            p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params if p["name"] != missing_param["name"]
+                            p["name"]: _generate_query_value(p["schema"]) for p in required_params if p["name"] != missing_param["name"]
                         }
                         test_path = endpoint["path"] + build_query_string(partial_query)
                         result = execute_test(base_url, endpoint["method"], test_path, data = None)
@@ -505,7 +508,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                             invalid_value = _invalid_type_value(target_schema)
 
                         invalid_query = {
-                            p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params if p["name"] != target_param["name"]
+                            p["name"]: _generate_query_value(p["schema"]) for p in required_params if p["name"] != target_param["name"]
                         }
                         invalid_query[target_param["name"]] = invalid_value
                         test_path = endpoint["path"] + build_query_string(invalid_query)
@@ -527,7 +530,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                             continue
 
                         invalid_query = {
-                            p["name"]: generate_valid_value(p["schema"]) or "sample-value" for p in required_params if p["name"] != enum_param["name"]
+                            p["name"]: _generate_query_value(p["schema"]) for p in required_params if p["name"] != enum_param["name"]
                         }
                         invalid_query[enum_param["name"]] = "VALUE_NOT_IN_ENUM_LIST"
                         test_path = endpoint["path"] + build_query_string(invalid_query)
