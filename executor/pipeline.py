@@ -372,7 +372,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         cleanup_if_unexpectedly_succeeded(base_url, endpoints, endpoint, result, schema)
 
 
-            if category_filter is  None or constants.MALFORMED_JSON in category_filter:
+            if category_filter is None or constants.MALFORMED_JSON in category_filter:
                 for case in generate_malformed_json_cases():
                     malformed_put_setup = None
                     test_path = filled_path
@@ -392,7 +392,15 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     result["expected_status"] = 400
                     result["description"] = case["description"]
                     result["template_path"] = endpoint["path"]
-                    results.append(result)     
+                    results.append(result)
+                    if endpoint["method"] == "POST":
+                        cleanup_if_unexpectedly_succeeded(
+                            base_url,
+                            endpoints,
+                            endpoint,
+                            result,
+                            schema,
+                        )   
             if category_filter is  None or constants.WRONG_CONTENT_TYPE in category_filter:
                 valid_data_for_ct_test = generate_valid_object(schema)
                 import json as json_module
@@ -419,7 +427,14 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 result["description"] = f"Valid JSON body with wrong Content-Type (text/plain) (Accept-Post header present: {has_accept_post_header})"
                 result["template_path"] = endpoint["path"]
                 results.append(result)
-
+                if endpoint["method"] == "POST":
+                    cleanup_if_unexpectedly_succeeded(
+                        base_url,
+                        endpoints,
+                        endpoint,
+                        result,
+                        schema,
+                    )
             for skipped in get_skipped_categories(schema):
                 if category_filter is not None and skipped["category"] not in category_filter:
                     continue

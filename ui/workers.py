@@ -112,6 +112,7 @@ class RunAnalysisWorker(QObject):
                     "template_path": result.template_path,
                     "category": result.category,
                     "field": result.field,
+                    "expected_status": result.expected_status,
                     "status_code": result.status_code,
                     "description": result.description,
                 }

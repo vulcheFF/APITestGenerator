@@ -42,7 +42,7 @@ def build_run_analysis_text(run, issues: list[dict], passed: list[dict]) -> str:
 
             lines.append(
                 f"- PASS | "
-                f"- {result.get('method')} {path} | "
+                f"{result.get('method')} {path} | "
                 f"category={result.get('category')} | "
                 f"field={result.get('field') or 'N/A'} | "
                  f"expected={result.get('expected_status')} | "
