@@ -46,7 +46,9 @@ def validate_response_against_schema(response_body, schema: dict) -> list[str]:
         errors.append(f"Value {response_body!r} is not one of the allowed enum values {schema['enum']}")
 
     schema_type = schema.get("type")
-
+    if schema_type is None and ("properties" in schema or "required" in schema):
+        schema_type = "object"
+        
     if schema_type == "object":
         if not isinstance(response_body, dict):
             return [f"Expected object, got {type(response_body).__name__}"]

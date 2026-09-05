@@ -201,9 +201,18 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 if endpoint["method"] == "PUT":
                     invalid_put_setup = create_resource_for_put_test(base_url, spec, endpoints, endpoint)
 
+                if endpoint["method"] == "PUT" and invalid_put_setup is None:
+                    all_skipped.append({
+                    "path": endpoint["path"],
+                    "method": endpoint["method"],
+                    "category": case["category"],
+                    "reason": ("Could not create a temporary resource for safe stateful PUT testing."),
+                    })
+                    continue
+
                 test_path = filled_path
 
-                if endpoint["method"] == "PUT" and invalid_put_setup is not None:
+                if endpoint["method"] == "PUT":
                     test_path = invalid_put_setup["path"]
 
                     id_field = invalid_put_setup["id_field"]
@@ -245,23 +254,30 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         if(isinstance(mass_assignment_case["data"],dict) and id_field in mass_assignment_case["data"]):
                             mass_assignment_case["data"][id_field] = mass_assignment_setup["id"]
 
+                if endpoint["method"] =="PUT" and mass_assignment_setup is None:
+                    all_skipped.append({
+                        "path": endpoint["path"],
+                        "method": endpoint["method"],
+                        "category": constants.MASS_ASSIGNMENT,
+                        "reason": ("Could not create a temporary resource for safe stateful PUT testing."),
+                    })
+                else: 
+                    result = execute_test(base_url, endpoint["method"], test_path, mass_assignment_case["data"])
 
-                result = execute_test(base_url, endpoint["method"], test_path, mass_assignment_case["data"])
+                    if mass_assignment_setup is not None:
+                        cleanup_created_resource(base_url, endpoints, mass_assignment_setup["resource_path"], mass_assignment_setup["id"],)
 
-                if mass_assignment_setup is not None:
-                    cleanup_created_resource(base_url, endpoints, mass_assignment_setup["resource_path"], mass_assignment_setup["id"],)
+                    result = attach_schema_conformance(result, spec, endpoint)
+                    result = attach_template_path(result, endpoint)
+                    result["test_type"] = "invalid"
+                    result["category"] = mass_assignment_case["category"]
+                    result["field"] = mass_assignment_case["field"]
+                    result["expected_status"] = mass_assignment_case["expected_status"]
+                    result["description"] = mass_assignment_case["description"]
+                    results.append(result)
 
-                result = attach_schema_conformance(result, spec, endpoint)
-                result = attach_template_path(result, endpoint)
-                result["test_type"] = "invalid"
-                result["category"] = mass_assignment_case["category"]
-                result["field"] = mass_assignment_case["field"]
-                result["expected_status"] = mass_assignment_case["expected_status"]
-                result["description"] = mass_assignment_case["description"]
-                results.append(result)
-
-                if endpoint["method"] == "POST":
-                    cleanup_if_unexpectedly_succeeded(base_url, endpoints, endpoint, result, schema)
+                    if endpoint["method"] == "POST":
+                        cleanup_if_unexpectedly_succeeded(base_url, endpoints, endpoint, result, schema)
 
             #put_id_sync = prepare_put_id_sync(base_url,endpoint,schema,path_param_schema,)
             if category_filter is None or constants.AI_IMPLICIT_CONSTRAINT_VIOLATION in category_filter or constants.AI_IMPLICIT_CONSTRAINT_VALID in category_filter:
@@ -282,15 +298,29 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     if category_filter is not None and ai_case["category"] not in category_filter:
                         continue
                     ai_put_setup = None
+
                     if endpoint["method"] == "PUT":
                         ai_put_setup = create_resource_for_put_test(base_url, spec, endpoints, endpoint)
+
                     ai_test_path = filled_path
+                    
+                    if endpoint["method"] == "PUT" and ai_put_setup is None:
+                        all_skipped.append({
+                            "path": endpoint["path"],
+                            "method": endpoint["method"],
+                            "category": ai_case["category"],
+                            "reason": ("Could not create a temporary resource for safe stateful PUT testing."),
+                        })
+                        continue
+
                     if endpoint["method"] == "PUT" and ai_put_setup is not None:
                         ai_test_path = ai_put_setup["path"]
                         id_field = ai_put_setup["id_field"]
                         if(id_field in ai_case["data"] and ai_case["field"] != id_field):
                             ai_case["data"][id_field] = ai_put_setup["id"]
+
                     result = execute_test(base_url, endpoint["method"], ai_test_path, ai_case["data"])
+
                     if endpoint["method"] == "PUT" and ai_put_setup is not None:
                         cleanup_created_resource(base_url, endpoints, ai_put_setup["resource_path"], ai_put_setup["id"])
                         id_field = ai_put_setup["id_field"]
@@ -339,40 +369,51 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                     })
                 if cross_case:
                     cross_put_setup = None
+
                     if endpoint["method"] == "PUT":
                         cross_put_setup = create_resource_for_put_test(base_url, spec, endpoints, endpoint)
-                    cross_test_path = filled_path
-                    if endpoint["method"] == "PUT" and cross_put_setup is not None:
-                        cross_test_path = cross_put_setup["path"]
 
-                        id_field = cross_put_setup["id_field"]
-                        tested_fields = cross_case["field"].split("+")
+                    if endpoint["method"] == "PUT" and cross_put_setup is None:
+                        all_skipped.append({
+                            "path": endpoint["path"],
+                            "method": endpoint["method"],
+                            "category": constants.AI_CROSS_FIELD_VIOLATION,
+                            "reason": ("Could not create a temporary resource for safe stateful PUT testing."),
+                        })
+                    else:   
+                        cross_test_path = filled_path
 
-                        if (id_field in cross_case["data"] and id_field not in tested_fields):
-                            cross_case["data"][id_field] = cross_put_setup["id"]
+                        if endpoint["method"] == "PUT" and cross_put_setup is not None:
+                            cross_test_path = cross_put_setup["path"]
 
-                    result = execute_test(base_url, endpoint["method"], cross_test_path, cross_case["data"])
-                    if endpoint["method"] == "PUT" and cross_put_setup is not None:
-                        cleanup_created_resource(base_url, endpoints, cross_put_setup["resource_path"],cross_put_setup["id"])
-                        id_field = cross_put_setup["id_field"]
-                        tested_fields = cross_case["field"].split("+")
+                            id_field = cross_put_setup["id_field"]
+                            tested_fields = cross_case["field"].split("+")
 
-                        if id_field in tested_fields:
-                            mutated_id = cross_case["data"].get(id_field)
-                            if(mutated_id is not None and mutated_id != cross_put_setup["id"]):
-                                cleanup_created_resource(base_url, endpoints, cross_put_setup["resource_path"], mutated_id)
+                            if (id_field in cross_case["data"] and id_field not in tested_fields):
+                                cross_case["data"][id_field] = cross_put_setup["id"]
 
-                    #result = execute_test(base_url, endpoint["method"], ai_test_path, cross_case["data"])
-                    result = attach_schema_conformance(result, spec, endpoint)
-                    result = attach_template_path(result, endpoint)
-                    result["test_type"] = "invalid"
-                    result["category"] = cross_case["category"]
-                    result["field"] = cross_case["field"]
-                    result["expected_status"] = cross_case["expected_status"]
-                    result["description"] = cross_case["description"]
-                    results.append(result)
-                    if endpoint["method"] == "POST":
-                        cleanup_if_unexpectedly_succeeded(base_url, endpoints, endpoint, result, schema)
+                        result = execute_test(base_url, endpoint["method"], cross_test_path, cross_case["data"])
+                        if endpoint["method"] == "PUT" and cross_put_setup is not None:
+                            cleanup_created_resource(base_url, endpoints, cross_put_setup["resource_path"],cross_put_setup["id"])
+                            id_field = cross_put_setup["id_field"]
+                            tested_fields = cross_case["field"].split("+")
+
+                            if id_field in tested_fields:
+                                mutated_id = cross_case["data"].get(id_field)
+                                if(mutated_id is not None and mutated_id != cross_put_setup["id"]):
+                                    cleanup_created_resource(base_url, endpoints, cross_put_setup["resource_path"], mutated_id)
+
+                        #result = execute_test(base_url, endpoint["method"], ai_test_path, cross_case["data"])
+                        result = attach_schema_conformance(result, spec, endpoint)
+                        result = attach_template_path(result, endpoint)
+                        result["test_type"] = "invalid"
+                        result["category"] = cross_case["category"]
+                        result["field"] = cross_case["field"]
+                        result["expected_status"] = cross_case["expected_status"]
+                        result["description"] = cross_case["description"]
+                        results.append(result)
+                        if endpoint["method"] == "POST":
+                            cleanup_if_unexpectedly_succeeded(base_url, endpoints, endpoint, result, schema)
 
 
             if category_filter is None or constants.MALFORMED_JSON in category_filter:
@@ -384,7 +425,15 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         if malformed_put_setup is not None:
                             test_path = malformed_put_setup["path"]
 
-                             
+                    if endpoint["method"] == "PUT" and malformed_put_setup is None:
+                        all_skipped.append({
+                            "path": endpoint["path"],
+                            "method": endpoint["method"],
+                            "category": constants.MALFORMED_JSON,
+                            "reason": ("Could not create a temporary resource for safe stateful PUT testing."),
+                        })
+                        continue     
+
                     result = execute_test(base_url, endpoint["method"], test_path, raw_body=case["body"])
                     if malformed_put_setup is not None:
                         cleanup_created_resource(base_url, endpoints, malformed_put_setup["resource_path"], malformed_put_setup["id"])
@@ -413,31 +462,44 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
                 if endpoint["method"] == "PUT":
                     wrong_ct_put_setup = create_resource_for_stateful_test(base_url, spec, endpoints, endpoint)
+
                     if wrong_ct_put_setup is not None:
                         test_path = wrong_ct_put_setup["path"]
                         id_field = wrong_ct_put_setup["id_field"]
                         if id_field in valid_data_for_ct_test:
                             valid_data_for_ct_test[id_field] = wrong_ct_put_setup["id"]
-                            
-                result = execute_test(base_url, endpoint["method"], test_path, raw_body=json_module.dumps(valid_data_for_ct_test), content_type="text/plain")
-                if wrong_ct_put_setup is not None:
-                    cleanup_created_resource(base_url, endpoints, wrong_ct_put_setup["resource_path"], wrong_ct_put_setup["id"])
-                has_accept_post_header = check_accept_post_header_present(result.get("response_headers",{}))
-                result["test_type"] = "invalid"
-                result["category"] = constants.WRONG_CONTENT_TYPE
-                result["field"] = None
-                result["expected_status"] = 415
-                result["description"] = f"Valid JSON body with wrong Content-Type (text/plain) (Accept-Post header present: {has_accept_post_header})"
-                result["template_path"] = endpoint["path"]
-                results.append(result)
-                if endpoint["method"] == "POST":
-                    cleanup_if_unexpectedly_succeeded(
-                        base_url,
-                        endpoints,
-                        endpoint,
-                        result,
-                        schema,
-                    )
+
+                if endpoint["method"] == "PUT" and wrong_ct_put_setup is None:
+                        all_skipped.append({
+                            "path": endpoint["path"],
+                            "method": endpoint["method"],
+                            "category": constants.WRONG_CONTENT_TYPE,
+                            "reason": ("Could not create a temporary resource for safe stateful PUT testing."),
+                        })
+                else:
+                  
+                    result = execute_test(base_url, endpoint["method"], test_path, raw_body=json_module.dumps(valid_data_for_ct_test), content_type="text/plain")
+
+                    if wrong_ct_put_setup is not None:
+                        cleanup_created_resource(base_url, endpoints, wrong_ct_put_setup["resource_path"], wrong_ct_put_setup["id"])
+
+                    has_accept_post_header = check_accept_post_header_present(result.get("response_headers",{}))
+                    result["test_type"] = "invalid"
+                    result["category"] = constants.WRONG_CONTENT_TYPE
+                    result["field"] = None
+                    result["expected_status"] = 415
+                    result["description"] = f"Valid JSON body with wrong Content-Type (text/plain) (Accept-Post header present: {has_accept_post_header})"
+                    result["template_path"] = endpoint["path"]
+                    results.append(result)
+
+                    if endpoint["method"] == "POST":
+                        cleanup_if_unexpectedly_succeeded(
+                            base_url,
+                            endpoints,
+                            endpoint,
+                            result,
+                            schema,
+                        )
             for skipped in get_skipped_categories(schema):
                 if category_filter is not None and skipped["category"] not in category_filter:
                     continue
@@ -576,22 +638,26 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                 base_path = re.sub(r"/\{[^}]+\}$", "", endpoint["path"])
 
                 real_id = (get_real_id_from_list(base_url, base_path, path_param_name,) if path_param_name else None)
-            # param_schema = get_path_param_schema(endpoint)
-            # base_path = re.sub(r"/\{[^}]+\}$", "", endpoint["path"])
-            # path_param_match = re.search(r"\{([^}]+)\}", endpoint["path"])
-            # path_param_name = path_param_match.group(1) if path_param_match else None
-            # real_id = get_real_id_from_list(base_url, base_path, path_param_name) if path_param_name else None
-
                 for case in generate_path_param_cases(param_schema):
                     if category_filter is not None and case["category"] not in category_filter:
                         continue
                     delete_setup = None
+
                     if (endpoint["method"] == "DELETE" and case["category"] == constants.VALID_ID):
                         delete_setup = create_resource_for_stateful_test(base_url, spec, endpoints, endpoint)
+                        if delete_setup is None:
+                            all_skipped.append({
+                                "path": endpoint["path"],
+                                "method": endpoint["method"],
+                                "category": constants.VALID_ID,
+                                "reason": ("Could not create a temporary resource for safe DELETE valid_id testing."),  
+                            })
+                            continue
                     if delete_setup is not None:
                         value = str(delete_setup["id"])
                     else:
                         value = real_id if (case["category"] == constants.VALID_ID and real_id is not None) else case["value"]
+
                     test_path = fill_path_params_with_value(endpoint["path"], value)
                     result = execute_test(base_url, endpoint["method"], test_path, data=None)
                     if delete_setup is not None:
@@ -647,7 +713,6 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                             f"(path parameter: {target_name})"
                         )
                         results.append(result)
-
 
 
     if category_filter is None or constants.METHOD_NOT_ALLOWED in category_filter:
