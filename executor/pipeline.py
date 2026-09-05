@@ -144,7 +144,6 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
 
             path_param_schema = get_path_param_schema(endpoint)
             filled_path = fill_path_params(endpoint["path"], path_param_schema)
-            #expected_success_status = get_expected_success_status(endpoint) or 200
             success_codes = get_success_status_codes(endpoint)
 
             expected_success_status = (min(success_codes) if success_codes else 200)
@@ -303,7 +302,7 @@ def run_all_tests(base_url: str, category_filter: list[str] = None, seed: int = 
                         ai_put_setup = create_resource_for_put_test(base_url, spec, endpoints, endpoint)
 
                     ai_test_path = filled_path
-                    
+
                     if endpoint["method"] == "PUT" and ai_put_setup is None:
                         all_skipped.append({
                             "path": endpoint["path"],
@@ -792,8 +791,6 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
             "error": "Setup failed",
         }
 
-
-    
     response_body = create_result.get("response_body")
 
     if isinstance(response_body, dict):
@@ -831,11 +828,9 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
         )
         first_delete["template_path"] = delete_endpoint["path"]
         return first_delete
-    #print("DEBUG: first_delete status:", first_delete["status_code"], "body:", first_delete.get("response_body"))
+    
     time.sleep(0.1)
     second_delete = execute_test(base_url, "DELETE", test_path, data=None)
-    #print("DEBUG: second_delete status:", second_delete["status_code"], "body:", second_delete.get("response_body"))
-
     second_delete["category"] = constants.DELETE_IDEMPOTENCY
     second_delete["field"] = None
     second_delete["expected_status"] = 404
@@ -843,7 +838,6 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
     second_delete["description"] = (f"Second DELETE on same result (id={create_id}) after successful first DELETE (first delete status:{first_delete['status_code']})")
     second_delete["template_path"] = delete_endpoint["path"]
     return second_delete
-
 
 
 def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_endpoint: dict) -> dict | None:
@@ -886,7 +880,6 @@ def test_put_idempotency(base_url: str, spec: dict, endpoints: list[dict], put_e
             "error": "Setup failed",
         }  
 
-    #created_id = create_result["response_body"].get(id_field, create_data.get(id_field)) if id_field else None
     response_body = create_result.get("response_body")
     if id_field and isinstance(response_body, dict):
         created_id  = response_body.get(id_field, create_data.get(id_field))
