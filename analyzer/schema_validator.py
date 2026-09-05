@@ -1,3 +1,5 @@
+import re
+
 def validate_response_against_schema(response_body, schema: dict) -> list[str]:
     if schema is None:
         return []
@@ -61,6 +63,25 @@ def validate_response_against_schema(response_body, schema: dict) -> list[str]:
     elif schema_type == "array":
         if not isinstance(response_body, list):
             return[f"Expected array, got {type(response_body).__name__}"]
+        
+        min_items = schema.get("minItems")
+        if min_items is not None and len(response_body) < min_items:
+            errors.append(f"Array length {len(response_body)} is below minItems {min_items}")
+
+        max_items = schema.get("maxItems")
+        if max_items is not None and len(response_body) > max_items:
+            errors.append(f"Array length {len(response_body)} is above maxItems {max_items}")
+
+        if schema.get("uniqueItems") is True:
+            for i in range(len(response_body)):
+                for j in range(i +1, len(response_body)):
+                    if response_body[i] == response_body[j]:
+                        errors.append(f"Array items at indexes {i} and {j} are duplicates, but uniqueItems is true")
+                        break
+                else:
+                    continue
+                break
+
         items_schema = schema.get("items", {})
         for i, item in enumerate(response_body):
             item_erros = validate_response_against_schema(item, items_schema)
@@ -77,6 +98,13 @@ def validate_response_against_schema(response_body, schema: dict) -> list[str]:
             max_length = schema.get("maxLength")
             if max_length is not None and len(response_body) > max_length:
                 errors.append(f"String length {len(response_body)} is above maxLength {max_length}")
+            pattern = schema.get("pattern")
+            if pattern is not None:
+                try:
+                    if re.search(pattern, response_body) is None:
+                        errors.append(f"String value {response_body!r} does not match {pattern!r}")
+                except re.error:
+                    pass
 
     elif schema_type == "integer":
         if not isinstance(response_body, int) or isinstance(response_body, bool):
