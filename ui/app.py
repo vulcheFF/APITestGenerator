@@ -6,7 +6,7 @@ from PySide6.QtCore import QThread
 from generator import constants
 from storage.database import init_db
 from storage.repository import get_recent_runs, get_run_summary
-from ai.ollama_client import MODEL as AI_MODEL, is_ollama_available
+from ai.ollama_client import MODEL as AI_MODEL
 from ui.workers import TestWorker, SpecAnalysisWorker, RunAnalysisWorker
 from ui.dialogs import CategorySelectionDialog
 from analyzer.run_comparison import compare_run_issues
@@ -456,10 +456,10 @@ class MainWindow(QMainWindow):
             self.status_label.setText("Please select at least one AI test category.")
             return
 
-        if not is_ollama_available():
-            QMessageBox.warning(self,"Tests start blocked","AI tests blocked: Ollama is not available.",)
-            self.status_label.setText("AI tests blocked: Ollama is not available.")
-            return
+        # if not is_ollama_available():
+        #     QMessageBox.warning(self,"Tests start blocked","AI tests blocked: Ollama is not available.",)
+        #     self.status_label.setText("AI tests blocked: Ollama is not available.")
+        #     return
 
         self.start_test_run(category_filter=self.selected_ai_categories, ai_enabled=True, ai_model=AI_MODEL)
 
