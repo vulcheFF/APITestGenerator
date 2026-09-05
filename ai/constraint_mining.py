@@ -123,11 +123,6 @@ def mine_implicit_constraint(field_name: str, field_schema: dict, ai_model: str 
         )
         if field_schema.get(key) is not None
     }
-    # type_hint = ""
-
-    # if declared_type == "object":
-    #     type_hint = "\nIMPORTANT: Since this field is an OBJECT, suggested_valid_example and suggested_invalid_example must be JSON objects (not plain strings), matching the nested properties described above."
-
 
     prompt = f"""
         You are analyzing an OpenAPI field for possible implicit validation constraints.

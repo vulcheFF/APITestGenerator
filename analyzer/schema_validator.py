@@ -4,6 +4,14 @@ def validate_response_against_schema(response_body, schema: dict) -> list[str]:
 
     errors = []
 
+    if "allOf" in schema:
+        all_errors = []
+
+        for sub_schema in schema["allOf"]:
+            all_errors.extend(validate_response_against_schema(response_body, sub_schema))
+            
+        return all_errors
+
     if "anyOf" in schema:
         alternatives = schema["anyOf"]
 
@@ -30,6 +38,7 @@ def validate_response_against_schema(response_body, schema: dict) -> list[str]:
             return ["Response does not match any of the expected schemas (oneOf)"]      
 
         return [f"Response matches {matched_count} schemas, but oneOf requires exactly one"]  
+
 
     if "enum" in schema and response_body not in schema["enum"]:
         errors.append(f"Value {response_body!r} is not one of the allowed enum values {schema['enum']}")
