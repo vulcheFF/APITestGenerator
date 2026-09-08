@@ -456,11 +456,6 @@ class MainWindow(QMainWindow):
             self.status_label.setText("Please select at least one AI test category.")
             return
 
-        # if not is_ollama_available():
-        #     QMessageBox.warning(self,"Tests start blocked","AI tests blocked: Ollama is not available.",)
-        #     self.status_label.setText("AI tests blocked: Ollama is not available.")
-        #     return
-
         self.start_test_run(category_filter=self.selected_ai_categories, ai_enabled=True, ai_model=AI_MODEL)
 
 
@@ -855,7 +850,7 @@ class MainWindow(QMainWindow):
             self.history_summary_label.setText(message)
             return
 
-        QMessageBox.warning(self,"Export blocked",f"Run #{run.id} exported successfully as {export_format}",)
+        QMessageBox.warning(self,"Export successful",f"Run #{run.id} exported successfully as {export_format}",)
         self.history_summary_label.setText(f"Run #{run.id} exported successfully as {export_format}.")
 
 
@@ -1248,6 +1243,7 @@ class MainWindow(QMainWindow):
             base_url_override=config["base_url"],
             status_message = status_message,
         )
+
 def main():
     app = QApplication(sys.argv)
 

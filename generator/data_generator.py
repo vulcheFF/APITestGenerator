@@ -463,13 +463,9 @@ def generate_ai_constraint_cases(schema: dict, put_id_sync: dict | None = None, 
 
         field_items.append((field_name, field_schema))
 
-
     with ThreadPoolExecutor(max_workers=4) as executor:
         ai_results = list(executor.map(lambda item: (item[0], mine_implicit_constraint(item[0], item[1], ai_model=ai_model)), field_items))
 
-
-    
-    #ai_result = mine_implicit_constraint(field_name, field_schema)
     for field_name, ai_result in ai_results:
         if ai_result is None:
             continue

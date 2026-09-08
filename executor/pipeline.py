@@ -87,8 +87,6 @@ def fill_path_params(path: str, param_schema: dict | None = None) -> str:
     value = get_default_path_value(param_schema)
     return re.sub(r"\{[^}]+\}", value, path)
 
-
-
 def attach_schema_conformance(result: dict, spec: dict, endpoint: dict) -> dict:
     response_schema = get_response_schema(spec, endpoint, str(result["status_code"]))
     if response_schema is not None:
