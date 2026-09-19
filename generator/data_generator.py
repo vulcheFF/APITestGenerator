@@ -165,6 +165,7 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
         if min_items is not None and min_items > 0:
             test_cases.append({
                 "category": constants.ARRAY_BOUNDARY,
+
                 "field": None,
                 "expected_status": 422,
                 "description": f"Root array below minItems",
@@ -332,16 +333,25 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
             })
         #invalid array item type - ok length, wrong type
         if field_type == "array" and field_schema.get("items"):
-            obj = generate_valid_object(schema)
             items_schema = field_schema["items"]
-            obj[field_name] = [_invalid_type_value(items_schema)]
-            test_cases.append({
-                "category": constants.INVALID_ARRAY_ITEM_TYPE,
-                "field": field_name,
-                "expected_status": 422,
-                "description": f"Array with ok length but wrong type element for field '{field_name}'",
-                "data": obj,
-            })
+
+            min_items = field_schema.get("minItems", 0)
+            max_items = field_schema.get("maxItems")
+            count = max(min_items,1)
+            if max_items is None or count <= max_items:
+                    
+                obj = generate_valid_object(schema)
+                array_value = [generate_valid_value(items_schema) for _ in range(count)]
+                array_value[0] = _invalid_type_value(items_schema)
+                
+                obj[field_name] = array_value
+                test_cases.append({
+                    "category": constants.INVALID_ARRAY_ITEM_TYPE,
+                    "field": field_name,
+                    "expected_status": 422,
+                    "description": f"Array with ok length but wrong type element for field '{field_name}'",
+                    "data": obj,
+                })
             
         #array boundary - <minItems or >maxItems
         if field_type == "array":
@@ -374,17 +384,28 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
 
             #duplicate_array_items - uniqueItems
             if field_type == "array" and field_schema.get("uniqueItems"):
-                obj = generate_valid_object(schema)
                 items_schema = field_schema.get("items", {})
-                duplicate_value = generate_valid_value(items_schema)
-                obj[field_name] = [duplicate_value, duplicate_value]
-                test_cases.append({
-                    "category": constants.DUPLICATE_ARRAY_ITEMS,
-                    "field": field_name,
-                    "expected_status": 422,
-                    "description": f"Array with duplicate items for field '{field_name}'",
-                    "data": obj,
-                })
+
+                min_items = field_schema.get("minItems", 0)
+                max_items = field_schema.get("maxItems")
+
+                count = max(min_items, 2)
+
+                if max_items is None or count <= max_items:
+
+                    obj = generate_valid_object(schema)
+                    array_value = [generate_valid_value(items_schema) for _ in range(count)]
+                    array_value[1] = array_value[0]
+
+                    
+                    obj[field_name] = array_value
+                    test_cases.append({
+                        "category": constants.DUPLICATE_ARRAY_ITEMS,
+                        "field": field_name,
+                        "expected_status": 422,
+                        "description": f"Array with duplicate items for field '{field_name}'",
+                        "data": obj,
+                    })
             if field_type == "array" and field_schema.get("minItems") is None:
                 obj = generate_valid_object(schema)
                 obj[field_name] = []
