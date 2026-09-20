@@ -667,7 +667,7 @@ def get_skipped_query_categories(query_params: list[dict]) -> list[dict]:
         })
         return skipped
 
-    has_non_string_type = any((p["schema"].get("items",{}) if p["schema"].get("type") == "array" else p["schema"].get("type")) not in ("string",None) for p in required_params)
+    has_non_string_type = any((p["schema"].get("items",{}).get("type") if p["schema"].get("type") == "array" else p["schema"].get("type")) not in ("string",None) for p in required_params)
     if not has_non_string_type:
         skipped.append({
             "category": constants.INVALID_QUERY_PARAM_VALUE,
