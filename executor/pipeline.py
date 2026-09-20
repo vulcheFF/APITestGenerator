@@ -791,10 +791,21 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
 
     response_body = create_result.get("response_body")
 
-    if isinstance(response_body, dict):
-        create_id = response_body.get("id", create_data.get("id"))
+    if id_field and isinstance(response_body, dict):
+        create_id = response_body.get(
+            id_field,
+            create_data.get(id_field)
+            )
+    elif id_field:
+        create_id = create_data.get(id_field)
     else:
-        create_id = create_data.get("id")
+        create_id = None
+
+    #hardcoded for "id" - old 
+    # if isinstance(response_body, dict):
+    #     create_id = response_body.get("id", create_data.get("id"))
+    # else:
+    #     create_id = create_data.get("id")
 
     if create_id is None:
         return {
@@ -816,6 +827,7 @@ def test_delete_idempotency(base_url: str, spec:dict, endpoints: list[dict], del
     first_delete = execute_test(base_url, "DELETE", test_path, data=None)
     first_delete_status = first_delete.get("status_code")
     if first_delete_status is None or not (200 <=first_delete_status<300):
+        cleanup_created_resource(base_url, endpoints, create_endpoint["path"], create_id)
         first_delete["category"] = constants.DELETE_IDEMPOTENCY
         first_delete["field"] = None
         first_delete["expected_status"] = 200
