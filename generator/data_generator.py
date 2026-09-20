@@ -316,7 +316,7 @@ def generate_invalid_objects(schema: dict) -> list[dict]:
                 "category": constants.INVALID_BOOLEAN,
                 "field": field_name,
                 "expected_status": 422,
-                "description": f"Value outside enum list for field '{field_name}'",
+                "description": f"Value is not boolean for field '{field_name}'",
                 "data": obj,
             })
 
